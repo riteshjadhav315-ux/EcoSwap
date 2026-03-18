@@ -139,6 +139,70 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleDeleteUser = async (uid: string) => {
+    if (!window.confirm("Are you sure you want to remove this user? This action cannot be undone.")) return;
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/admin/users/${uid}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        setUsers(users.filter(u => u.uid !== uid));
+      } else {
+        const errorData = await res.json();
+        alert(errorData.error || "Failed to delete user");
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      alert("An error occurred while deleting the user");
+    }
+  };
+
+  const handleDeleteReportTarget = async (targetId: string, targetType: 'product' | 'user') => {
+    if (!window.confirm(`Are you sure you want to delete this ${targetType}?`)) return;
+    try {
+      const token = localStorage.getItem("token");
+      const url = targetType === 'product' ? `/api/products/${targetId}` : `/api/admin/users/${targetId}`;
+      const res = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        if (targetType === 'product') {
+          setProducts(products.filter(p => p._id !== targetId));
+        } else {
+          setUsers(users.filter(u => u.uid !== targetId));
+        }
+        alert(`${targetType.charAt(0).toUpperCase() + targetType.slice(1)} deleted successfully`);
+      } else {
+        const errorData = await res.json();
+        alert(errorData.error || `Failed to delete ${targetType}`);
+      }
+    } catch (error) {
+      console.error(`Error deleting ${targetType}:`, error);
+      alert(`An error occurred while deleting the ${targetType}`);
+    }
+  };
+
+  const handleResolveReport = async (reportId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`/api/admin/reports/${reportId}/resolve`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        setReports(reports.map(r => r._id === reportId ? { ...r, status: 'resolved' } : r));
+      }
+    } catch (error) {
+      console.error("Error resolving report:", error);
+    }
+  };
+
   const filteredUsers = users.filter(u => 
     u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     u.email.toLowerCase().includes(searchTerm.toLowerCase())
@@ -399,8 +463,12 @@ export default function AdminDashboard() {
                               <UserMinus className="w-4 h-4" />
                             </button>
                           )}
-                          <button className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors" title="Block User">
-                            <XCircle className="w-4 h-4" />
+                          <button 
+                            onClick={() => handleDeleteUser(u.uid)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-xl transition-colors" 
+                            title="Remove User"
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>
@@ -530,10 +598,16 @@ export default function AdminDashboard() {
                       <button className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1">
                         <Eye className="w-4 h-4" /> View Target
                       </button>
-                      <button className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1">
+                      <button 
+                        onClick={() => handleResolveReport(report._id)}
+                        className="text-xs font-bold text-emerald-600 hover:text-emerald-700 transition-colors flex items-center gap-1"
+                      >
                         <CheckCircle className="w-4 h-4" /> Resolve
                       </button>
-                      <button className="text-xs font-bold text-red-600 hover:text-red-700 transition-colors flex items-center gap-1">
+                      <button 
+                        onClick={() => handleDeleteReportTarget(report.targetId, report.targetType)}
+                        className="text-xs font-bold text-red-600 hover:text-red-700 transition-colors flex items-center gap-1"
+                      >
                         <Trash2 className="w-4 h-4" /> Delete Target
                       </button>
                     </div>

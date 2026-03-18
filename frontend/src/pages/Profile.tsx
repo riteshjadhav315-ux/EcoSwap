@@ -7,7 +7,7 @@ import { getMyChats } from "../services/chatService";
 import { getWishlist, removeFromWishlist } from "../services/wishlistService";
 import { Product } from "../types";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail, Phone, MapPin, Calendar, Edit2, Save, X, Loader2, Camera, Package, Heart, Settings, Trash2, ExternalLink, ArrowRight, Recycle, MessageCircle, HelpCircle } from "lucide-react";
+import { User, Mail, Phone, MapPin, Calendar, Edit2, Save, X, Loader2, Camera, Package, Heart, Settings, Trash2, ExternalLink, ArrowRight, Recycle, MessageCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function Profile() {
@@ -312,13 +312,6 @@ export default function Profile() {
                   </div>
                   <ArrowRight className={`w-4 h-4 ${activeTab === 'wishlist' ? 'text-white/50' : 'text-emerald-300'}`} />
                 </button>
-                <Link to="/help" className="w-full flex items-center justify-between p-4 rounded-2xl hover:bg-emerald-50 transition-all group">
-                  <div className="flex items-center gap-3">
-                    <HelpCircle className="w-5 h-5 text-emerald-400 group-hover:text-emerald-600" />
-                    <span className="font-bold text-emerald-900">Help Center</span>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-emerald-300" />
-                </Link>
               </div>
             </div>
           </div>

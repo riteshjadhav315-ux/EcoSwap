@@ -69,6 +69,15 @@ export const getUserProducts = async (userId?: string) => {
   return data.map((p: any) => ({ ...p, id: p._id }));
 };
 
+export const getSoldProducts = async () => {
+  const response = await fetch(`${API_URL}/products/sold`, {
+    headers: getAuthHeader()
+  });
+  if (!response.ok) throw new Error("Failed to fetch sold products");
+  const data = await response.json();
+  return data.map((p: any) => ({ ...p, id: p._id }));
+};
+
 export const getAllProducts = async () => {
   const response = await fetch(`${API_URL}/products`);
   if (!response.ok) throw new Error("Failed to fetch products");

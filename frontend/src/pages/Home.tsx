@@ -134,12 +134,12 @@ const Home = () => {
                 Start Selling
                 <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
               </Link>
-              <Link 
-                to="/" 
+              <button 
+                onClick={() => document.getElementById('marketplace')?.scrollIntoView({ behavior: 'smooth' })}
                 className="px-10 py-5 bg-white text-emerald-900 border border-emerald-100 rounded-[2rem] font-black hover:bg-emerald-50 transition-all shadow-sm text-lg"
               >
                 Browse Items
-              </Link>
+              </button>
             </div>
 
             <div className="flex gap-12">
@@ -171,13 +171,14 @@ const Home = () => {
             transition={{ duration: 0.8, delay: 0.2 }}
             className="relative"
           >
-            <div className="relative rounded-[4rem] overflow-hidden shadow-[0_32px_64px_-16px_rgba(5,150,105,0.2)] border-[12px] border-white">
+            <div className="relative rounded-[4rem] overflow-hidden shadow-[0_32px_64px_-16px_rgba(5,150,105,0.2)] border-[12px] border-white group">
               <img 
-                src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1200" 
-                alt="Sustainable Shopping" 
-                className="w-full h-[600px] object-cover"
+                src="https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&q=80&w=1200" 
+                alt="Eco-Friendly Electronics Marketplace" 
+                className="w-full h-[600px] object-cover transition-transform duration-700 group-hover:scale-105"
                 referrerPolicy="no-referrer"
               />
+              <div className="absolute inset-0 bg-gradient-to-tr from-emerald-900/10 to-transparent pointer-events-none" />
             </div>
 
             {/* Floating Stats Card */}

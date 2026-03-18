@@ -16,7 +16,10 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isLocationOpen, setIsLocationOpen] = useState(false);
+  const [isLanguageOpen, setIsLanguageOpen] = useState(false);
+  const [selectedLanguage, setSelectedLanguage] = useState("English");
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const languageRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
   const locationRef = useRef<HTMLDivElement>(null);
@@ -49,6 +52,9 @@ export default function Navbar() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
       }
+      if (languageRef.current && !languageRef.current.contains(event.target as Node)) {
+        setIsLanguageOpen(false);
+      }
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
         setIsNotificationsOpen(false);
       }
@@ -70,8 +76,17 @@ export default function Navbar() {
     { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", color: "text-emerald-600" },
     ...(user?.role === 'admin' ? [{ label: "Admin Panel", icon: ShieldCheck, href: "/admin", color: "text-purple-600" }] : []),
     { label: "Chats", icon: MessageCircle, href: "/chats", color: "text-emerald-600" },
-    { label: "Help", icon: HelpCircle, href: "#", color: "text-amber-600" },
-    { label: "Select language", icon: Languages, href: "#", color: "text-indigo-600" },
+    { label: "Help", icon: HelpCircle, href: "/help", color: "text-amber-600" },
+    { label: "Select language", icon: Languages, onClick: () => setIsLanguageOpen(true), color: "text-indigo-600" },
+  ];
+
+  const languages = [
+    { name: "English", code: "en" },
+    { name: "Hindi", code: "hi" },
+    { name: "Marathi", code: "mr" },
+    { name: "Spanish", code: "es" },
+    { name: "French", code: "fr" },
+    { name: "German", code: "de" },
   ];
 
   const [dbStatus, setDbStatus] = useState<'connected' | 'fallback' | 'loading'>('loading');
@@ -430,17 +445,33 @@ export default function Navbar() {
                     {/* Menu Items */}
                     <div className="px-2">
                       {profileMenuItems.map((item, index) => (
-                        <Link
-                          key={index}
-                          to={item.href}
-                          onClick={() => setIsProfileOpen(false)}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-emerald-800 hover:bg-emerald-50 rounded-xl transition-colors group"
-                        >
-                          <div className={`p-1.5 rounded-lg bg-white border border-emerald-50 shadow-sm group-hover:scale-110 transition-transform`}>
-                            <item.icon className={`w-4 h-4 ${item.color}`} />
-                          </div>
-                          <span>{item.label}</span>
-                        </Link>
+                        item.href ? (
+                          <Link
+                            key={index}
+                            to={item.href}
+                            onClick={() => setIsProfileOpen(false)}
+                            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-emerald-800 hover:bg-emerald-50 rounded-xl transition-colors group"
+                          >
+                            <div className={`p-1.5 rounded-lg bg-white border border-emerald-50 shadow-sm group-hover:scale-110 transition-transform`}>
+                              <item.icon className={`w-4 h-4 ${item.color}`} />
+                            </div>
+                            <span>{item.label}</span>
+                          </Link>
+                        ) : (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setIsProfileOpen(false);
+                              item.onClick?.();
+                            }}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm font-medium text-emerald-800 hover:bg-emerald-50 rounded-xl transition-colors group"
+                          >
+                            <div className={`p-1.5 rounded-lg bg-white border border-emerald-50 shadow-sm group-hover:scale-110 transition-transform`}>
+                              <item.icon className={`w-4 h-4 ${item.color}`} />
+                            </div>
+                            <span>{item.label}</span>
+                          </button>
+                        )
                       ))}
                     </div>
                     
@@ -454,6 +485,45 @@ export default function Navbar() {
                         <div className="w-1/3 h-full bg-emerald-400" />
                       </div>
                       <p className="text-[9px] text-emerald-300 mt-2">Join our community of conscious consumers!</p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Language Selection Dropdown */}
+              <AnimatePresence>
+                {isLanguageOpen && (
+                  <motion.div
+                    ref={languageRef}
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 mt-2 w-64 bg-white rounded-3xl shadow-2xl border border-emerald-50 overflow-hidden z-[110] py-2"
+                  >
+                    <div className="px-6 py-4 border-b border-emerald-50 bg-emerald-50/30">
+                      <h3 className="text-sm font-black text-emerald-900 uppercase tracking-wider">Select Language</h3>
+                    </div>
+                    <div className="p-2 space-y-1">
+                      {languages.map((lang) => (
+                        <button
+                          key={lang.code}
+                          onClick={() => {
+                            setSelectedLanguage(lang.name);
+                            setTimeout(() => setIsLanguageOpen(false), 300);
+                          }}
+                          className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${
+                            selectedLanguage === lang.name
+                              ? "bg-emerald-600 text-white shadow-md shadow-emerald-100"
+                              : "text-emerald-800 hover:bg-emerald-50"
+                          }`}
+                        >
+                          <span>{lang.name}</span>
+                          {selectedLanguage === lang.name && <Check className="w-4 h-4" />}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="px-4 py-2 bg-emerald-900 text-[9px] text-emerald-300 text-center font-medium">
+                      UI Demonstration Only
                     </div>
                   </motion.div>
                 )}
@@ -594,15 +664,29 @@ export default function Navbar() {
                 <div className="space-y-2">
                   <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-4">Marketplace</p>
                   {profileMenuItems.map((item, index) => (
-                    <Link
-                      key={index}
-                      to={item.href}
-                      onClick={() => setIsMenuOpen(false)}
-                      className="flex items-center gap-4 p-3 rounded-xl hover:bg-emerald-50 transition-colors"
-                    >
-                      <item.icon className={`w-5 h-5 ${item.color}`} />
-                      <span className="font-medium text-emerald-900">{item.label}</span>
-                    </Link>
+                    item.href ? (
+                      <Link
+                        key={index}
+                        to={item.href}
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex items-center gap-4 p-3 rounded-xl hover:bg-emerald-50 transition-colors"
+                      >
+                        <item.icon className={`w-5 h-5 ${item.color}`} />
+                        <span className="font-medium text-emerald-900">{item.label}</span>
+                      </Link>
+                    ) : (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          item.onClick?.();
+                        }}
+                        className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-emerald-50 transition-colors"
+                      >
+                        <item.icon className={`w-5 h-5 ${item.color}`} />
+                        <span className="font-medium text-emerald-900 text-left">{item.label}</span>
+                      </button>
+                    )
                   ))}
                 </div>
               </div>
@@ -635,6 +719,53 @@ export default function Navbar() {
               </div>
             </motion.div>
           </>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Language Selection Modal (Keep as modal for mobile UX) */}
+      <AnimatePresence>
+        {isLanguageOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:hidden">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsLanguageOpen(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-xs bg-white rounded-[2rem] shadow-2xl overflow-hidden border border-emerald-50"
+            >
+              <div className="p-6 border-b border-emerald-50 flex justify-between items-center bg-emerald-50/30">
+                <h3 className="text-lg font-black text-emerald-900">Language</h3>
+                <button onClick={() => setIsLanguageOpen(false)} className="p-1 text-emerald-400">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="p-4 space-y-2">
+                {languages.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => {
+                      setSelectedLanguage(lang.name);
+                      setTimeout(() => setIsLanguageOpen(false), 300);
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all font-bold ${
+                      selectedLanguage === lang.name
+                        ? "bg-emerald-600 border-emerald-600 text-white"
+                        : "bg-white border-emerald-50 text-emerald-900"
+                    }`}
+                  >
+                    <span>{lang.name}</span>
+                    {selectedLanguage === lang.name && <Check className="w-4 h-4" />}
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </nav>

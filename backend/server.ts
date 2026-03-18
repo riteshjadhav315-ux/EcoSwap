@@ -30,6 +30,7 @@ import { Wishlist } from "./models/Wishlist";
 import { Payment } from "./models/Payment";
 import { Report } from "./models/Report";
 import { Review } from "./models/Review";
+import { SoldProduct } from "./models/SoldProduct";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
@@ -242,6 +243,19 @@ async function startServer() {
     }
   });
 
+  app.delete("/api/admin/users/:uid", checkAdmin, async (req, res) => {
+    try {
+      const user = await User.findOneAndDelete({ uid: req.params.uid });
+      if (!user) return res.status(404).json({ error: "User not found" });
+      
+      // Also delete associated products, payments, etc. if needed
+      // For now, just delete the user
+      res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete user" });
+    }
+  });
+
   app.get("/api/admin/products", checkAdmin, async (req, res) => {
     try {
       const products = await Product.find().sort({ createdAt: -1 });
@@ -266,6 +280,15 @@ async function startServer() {
       res.json(reports);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch reports" });
+    }
+  });
+
+  app.patch("/api/admin/reports/:id/resolve", checkAdmin, async (req, res) => {
+    try {
+      const report = await Report.findByIdAndUpdate(req.params.id, { status: 'resolved' }, { new: true });
+      res.json(report);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to resolve report" });
     }
   });
 
@@ -331,6 +354,15 @@ async function startServer() {
       res.json(products);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch your products" });
+    }
+  });
+
+  app.get("/api/products/sold", authenticate, async (req: any, res) => {
+    try {
+      const soldProducts = await SoldProduct.find({ sellerId: req.user.uid }).sort({ soldAt: -1 });
+      res.json(soldProducts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch sold products" });
     }
   });
 
@@ -443,6 +475,13 @@ async function startServer() {
         const imageUrls = (req.files as any[]).map(file => file.path);
         updateData.images = imageUrls;
         updateData.imageUrl = imageUrls[0];
+      }
+
+      // If status is being updated to "sold", move to sold collection
+      if (updateData.status === "sold" && product.status !== "sold") {
+        await moveProductToSold(req.params.id);
+        const updatedProduct = await Product.findById(req.params.id);
+        return res.json(updatedProduct);
       }
 
       const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -807,6 +846,39 @@ async function startServer() {
     }
   });
 
+  const moveProductToSold = async (productId: string, buyerId?: string, buyerName?: string) => {
+    const product = await Product.findById(productId);
+    if (!product) throw new Error("Product not found");
+
+    // Create sold product entry
+    const soldProduct = new SoldProduct({
+      productId: product._id,
+      title: product.title,
+      description: product.description,
+      price: product.price,
+      category: product.category,
+      location: product.location,
+      imageUrl: product.imageUrl,
+      images: product.images,
+      sellerName: product.sellerName,
+      sellerId: product.sellerId,
+      sellerEmail: product.sellerEmail,
+      sellerPhone: product.sellerPhone,
+      buyerId,
+      buyerName,
+      condition: product.condition,
+      soldAt: new Date(),
+    });
+
+    await soldProduct.save();
+
+    // Update original product status
+    product.status = "sold";
+    await product.save();
+
+    return soldProduct;
+  };
+
   const processPaymentSuccess = async (productId: string, buyerId: string, paymentDetails: any) => {
     console.log(`Processing payment success for product ${productId}, buyer ${buyerId}`);
     const product = await Product.findById(productId);
@@ -834,10 +906,10 @@ async function startServer() {
       throw error;
     }
 
-    // Update product status
-    product.status = "sold";
-    await product.save();
-    console.log(`Product ${productId} status updated to sold`);
+    // Move product to sold collection and update status
+    const buyer = await User.findOne({ uid: buyerId });
+    await moveProductToSold(productId, buyerId, buyer?.name);
+    console.log(`Product ${productId} moved to sold collection`);
 
     // Notify seller
     try {

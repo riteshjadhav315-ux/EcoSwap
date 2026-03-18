@@ -19,8 +19,7 @@ import {
   Edit,
   ExternalLink,
   Loader2,
-  AlertCircle,
-  HelpCircle
+  AlertCircle
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -30,10 +29,10 @@ import {
   getMyReviews, 
   getMyNotifications 
 } from "../services/dashboardService";
-import { getUserProducts, deleteProduct, updateProductStatus } from "../services/productService";
+import { getUserProducts, deleteProduct, updateProductStatus, getSoldProducts } from "../services/productService";
 import { Product } from "../types";
 
-type Tab = "overview" | "products" | "purchases" | "wishlist" | "reviews" | "notifications";
+type Tab = "overview" | "products" | "sold" | "purchases" | "wishlist" | "reviews" | "notifications";
 
 export default function Dashboard() {
   const { user, logout } = useAuth();
@@ -79,6 +78,9 @@ export default function Dashboard() {
           break;
         case "products":
           res = await getUserProducts();
+          break;
+        case "sold":
+          res = await getSoldProducts();
           break;
         case "purchases":
           res = await getMyPurchases();
@@ -127,11 +129,11 @@ export default function Dashboard() {
   const sidebarItems = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "products", label: "My Products", icon: Package },
+    { id: "sold", label: "Sold Items", icon: CheckCircle2 },
     { id: "purchases", label: "My Purchases", icon: ShoppingBag },
     { id: "wishlist", label: "Wishlist", icon: Heart },
     { id: "reviews", label: "My Reviews", icon: Star },
     { id: "notifications", label: "Notifications", icon: Bell },
-    { id: "help", label: "Help Center", icon: HelpCircle },
   ];
 
   return (
@@ -151,13 +153,7 @@ export default function Dashboard() {
           {sidebarItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => {
-                if (item.id === "help") {
-                  navigate("/help");
-                } else {
-                  setActiveTab(item.id as Tab);
-                }
-              }}
+              onClick={() => setActiveTab(item.id as Tab)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${
                 activeTab === item.id 
                   ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200" 
@@ -261,6 +257,7 @@ export default function Dashboard() {
             ) : (
               <div className="p-8">
                 {activeTab === "products" && <ProductsTable products={data} onDelete={handleDeleteProduct} onMarkSold={handleMarkAsSold} />}
+                {activeTab === "sold" && <SoldProductsTable products={data} />}
                 {activeTab === "purchases" && <PurchasesTable purchases={data} />}
                 {activeTab === "wishlist" && <WishlistTable items={data} />}
                 {activeTab === "reviews" && <ReviewsTable reviews={data} />}
@@ -365,6 +362,56 @@ function ProductsTable({ products, onDelete, onMarkSold }: any) {
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function SoldProductsTable({ products }: any) {
+  if (!products?.length) return <EmptyState label="No items sold yet." />;
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full">
+        <thead>
+          <tr className="text-left border-b border-emerald-50">
+            <th className="pb-4 font-black text-emerald-950">Product</th>
+            <th className="pb-4 font-black text-emerald-950">Price</th>
+            <th className="pb-4 font-black text-emerald-950">Buyer</th>
+            <th className="pb-4 font-black text-emerald-950">Sold Date</th>
+            <th className="pb-4 font-black text-emerald-950 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-emerald-50">
+          {products.map((p: any) => (
+            <tr key={p.id} className="group">
+              <td className="py-4">
+                <div className="flex items-center gap-4">
+                  <img src={p.imageUrl || (p.images && p.images[0])} alt={p.title} className="w-12 h-12 rounded-xl object-cover" />
+                  <span className="font-bold text-emerald-950">{p.title}</span>
+                </div>
+              </td>
+              <td className="py-4 font-bold text-emerald-600">₹{p.price}</td>
+              <td className="py-4">
+                <span className="font-bold text-emerald-950">{p.buyerName || "Direct Sale"}</span>
+              </td>
+              <td className="py-4 text-emerald-600/60 font-medium">
+                {new Date(p.soldAt).toLocaleDateString()}
+              </td>
+              <td className="py-4 text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <Link 
+                    to={`/product/${p.productId}`}
+                    className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                    title="View Original"
+                  >
+                    <ExternalLink className="w-5 h-5" />
+                  </Link>
                 </div>
               </td>
             </tr>

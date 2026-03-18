@@ -53,3 +53,14 @@ export async function uploadProfilePicture(file: File, uid: string) {
   
   return data.url;
 }
+
+export async function adminDeleteUser(uid: string, token: string) {
+  const response = await fetch(`${API_URL}/admin/users/${uid}`, {
+    method: "DELETE",
+    headers: {
+      "Authorization": `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) throw new Error("Failed to delete user");
+  return await response.json();
+}
