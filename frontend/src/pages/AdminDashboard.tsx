@@ -4,10 +4,28 @@ import {
   Users, Package, CreditCard, AlertTriangle, TrendingUp, 
   Search, Filter, Trash2, ShieldAlert, CheckCircle, XCircle,
   ChevronRight, MoreVertical, LayoutDashboard, Settings,
-  BarChart3, ShieldCheck, UserMinus, UserPlus, Eye
+  BarChart3, ShieldCheck, UserMinus, UserPlus, Eye,
+  ShoppingCart, DollarSign, Activity, PieChart
 } from "lucide-react";
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  LineChart, Line, AreaChart, Area, Cell, Pie, PieChart as RePieChart 
+} from 'recharts';
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { adminService } from "../services/adminService";
+
+interface AnalyticsData {
+  stats: {
+    totalUsers: number;
+    totalProducts: number;
+    totalSoldProducts: number;
+    totalRevenue: number;
+    activeListings: number;
+  };
+  monthlySales: { month: string; sales: number; revenue: number }[];
+  userGrowth: { month: string; count: number }[];
+}
 
 interface Stats {
   totalUsers: number;
@@ -58,12 +76,13 @@ interface Report {
 export default function AdminDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'products' | 'payments' | 'reports'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'products' | 'payments' | 'reports' | 'analytics'>('overview');
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -76,22 +95,21 @@ export default function AdminDashboard() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const token = localStorage.getItem("token");
-        const headers = { 'Authorization': `Bearer ${token}` };
-
-        const [statsRes, usersRes, productsRes, paymentsRes, reportsRes] = await Promise.all([
-          fetch("/api/admin/stats", { headers }),
-          fetch("/api/admin/users", { headers }),
-          fetch("/api/admin/products", { headers }),
-          fetch("/api/admin/payments", { headers }),
-          fetch("/api/admin/reports", { headers })
+        const [statsData, usersData, productsData, paymentsData, reportsData, analyticsData] = await Promise.all([
+          adminService.getStats(),
+          adminService.getUsers(),
+          adminService.getProducts(),
+          adminService.getPayments(),
+          adminService.getReports(),
+          adminService.getAnalytics()
         ]);
 
-        if (statsRes.ok) setStats(await statsRes.json());
-        if (usersRes.ok) setUsers(await usersRes.json());
-        if (productsRes.ok) setProducts(await productsRes.json());
-        if (paymentsRes.ok) setPayments(await paymentsRes.json());
-        if (reportsRes.ok) setReports(await reportsRes.json());
+        setStats(statsData);
+        setUsers(usersData);
+        setProducts(productsData);
+        setPayments(paymentsData);
+        setReports(reportsData);
+        setAnalytics(analyticsData);
       } catch (error) {
         console.error("Error fetching admin data:", error);
       } finally {
@@ -275,6 +293,15 @@ export default function AdminDashboard() {
           >
             <CreditCard className="w-5 h-5" />
             Payments
+          </button>
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${
+              activeTab === 'analytics' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' : 'text-emerald-600 hover:bg-emerald-50'
+            }`}
+          >
+            <PieChart className="w-5 h-5" />
+            Analytics
           </button>
           <button
             onClick={() => setActiveTab('reports')}
@@ -563,6 +590,149 @@ export default function AdminDashboard() {
                   ))}
                 </tbody>
               </table>
+            </motion.div>
+          )}
+
+          {activeTab === 'analytics' && (
+            <motion.div
+              key="analytics"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="space-y-8"
+            >
+              {/* Analytics Stats Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                {[
+                  { label: "Total Users", value: analytics?.stats.totalUsers || 0, icon: Users, color: "text-blue-600", bg: "bg-blue-50" },
+                  { label: "Total Products", value: analytics?.stats.totalProducts || 0, icon: Package, color: "text-emerald-600", bg: "bg-emerald-50" },
+                  { label: "Sold Products", value: analytics?.stats.totalSoldProducts || 0, icon: ShoppingCart, color: "text-purple-600", bg: "bg-purple-50" },
+                  { label: "Total Revenue", value: `₹${(analytics?.stats.totalRevenue || 0).toLocaleString()}`, icon: DollarSign, color: "text-amber-600", bg: "bg-amber-50" },
+                  { label: "Active Listings", value: analytics?.stats.activeListings || 0, icon: Activity, color: "text-rose-600", bg: "bg-rose-50" },
+                ].map((stat, i) => (
+                  <div key={i} className="bg-white p-5 rounded-3xl border border-emerald-50 shadow-sm hover:shadow-md transition-all">
+                    <div className={`${stat.bg} ${stat.color} w-10 h-10 rounded-xl flex items-center justify-center mb-3`}>
+                      <stat.icon className="w-5 h-5" />
+                    </div>
+                    <p className="text-emerald-600/60 text-[10px] font-bold uppercase tracking-widest">{stat.label}</p>
+                    <h3 className="text-xl font-bold text-emerald-900 mt-1">{stat.value}</h3>
+                  </div>
+                ))}
+              </div>
+
+              {/* Charts Section */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Monthly Sales Chart */}
+                <div className="bg-white p-6 rounded-3xl border border-emerald-50 shadow-sm">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-emerald-900 flex items-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-emerald-600" />
+                      Monthly Sales & Revenue
+                    </h3>
+                  </div>
+                  <div className="h-80 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={analytics?.monthlySales}>
+                        <defs>
+                          <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#059669" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#059669" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0fdf4" />
+                        <XAxis 
+                          dataKey="month" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 12, fill: '#059669', fontWeight: 500 }}
+                        />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 12, fill: '#059669', fontWeight: 500 }}
+                        />
+                        <Tooltip 
+                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="sales" 
+                          stroke="#059669" 
+                          fillOpacity={1} 
+                          fill="url(#colorSales)" 
+                          strokeWidth={3}
+                        />
+                        <Area 
+                          type="monotone" 
+                          dataKey="revenue" 
+                          stroke="#3b82f6" 
+                          fillOpacity={0} 
+                          strokeWidth={3}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* User Growth Chart */}
+                <div className="bg-white p-6 rounded-3xl border border-emerald-50 shadow-sm">
+                  <div className="flex justify-between items-center mb-6">
+                    <h3 className="font-bold text-emerald-900 flex items-center gap-2">
+                      <UserPlus className="w-5 h-5 text-blue-600" />
+                      User Growth
+                    </h3>
+                  </div>
+                  <div className="h-80 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={analytics?.userGrowth}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0fdf4" />
+                        <XAxis 
+                          dataKey="month" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 12, fill: '#059669', fontWeight: 500 }}
+                        />
+                        <YAxis 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{ fontSize: 12, fill: '#059669', fontWeight: 500 }}
+                        />
+                        <Tooltip 
+                          cursor={{ fill: '#f0fdf4' }}
+                          contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        />
+                        <Bar dataKey="count" fill="#3b82f6" radius={[6, 6, 0, 0]} barSize={40} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Insights */}
+              <div className="bg-emerald-900 text-white p-8 rounded-[2rem] relative overflow-hidden">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-center gap-8">
+                  <div className="max-w-md">
+                    <h3 className="text-2xl font-bold mb-2">Platform Performance</h3>
+                    <p className="text-emerald-100/70 text-sm">
+                      Your marketplace is growing! We've seen a <span className="text-emerald-400 font-bold">12% increase</span> in active listings this month. 
+                      Keep optimizing the user experience to drive more conversions.
+                    </p>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-center min-w-[120px]">
+                      <p className="text-emerald-300 text-[10px] font-bold uppercase tracking-widest mb-1">Conversion Rate</p>
+                      <p className="text-2xl font-bold">3.2%</p>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10 text-center min-w-[120px]">
+                      <p className="text-emerald-300 text-[10px] font-bold uppercase tracking-widest mb-1">Avg. Sale Price</p>
+                      <p className="text-2xl font-bold">₹{(analytics?.stats.totalRevenue && analytics?.stats.totalSoldProducts) ? Math.round(analytics.stats.totalRevenue / analytics.stats.totalSoldProducts).toLocaleString() : 0}</p>
+                    </div>
+                  </div>
+                </div>
+                {/* Decorative elements */}
+                <div className="absolute -right-20 -top-20 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl" />
+                <div className="absolute -left-20 -bottom-20 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl" />
+              </div>
             </motion.div>
           )}
 

@@ -325,6 +325,93 @@ async function startServer() {
     }
   });
 
+  app.get("/api/admin/analytics", checkAdmin, async (req, res) => {
+    try {
+      const totalUsers = await User.countDocuments();
+      const totalProducts = await Product.countDocuments();
+      const totalSoldProducts = await SoldProduct.countDocuments();
+      const activeListings = await Product.countDocuments({ status: "available" });
+      
+      const revenueData = await SoldProduct.aggregate([
+        { $group: { _id: null, total: { $sum: "$price" } } }
+      ]);
+      const totalRevenue = revenueData[0]?.total || 0;
+
+      // Monthly Sales Data (last 6 months)
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5); // Get data for the last 6 months including current
+      sixMonthsAgo.setDate(1); // Start from the beginning of the month
+      
+      const monthlySales = await SoldProduct.aggregate([
+        { $match: { soldAt: { $gte: sixMonthsAgo } } },
+        {
+          $group: {
+            _id: { month: { $month: "$soldAt" }, year: { $year: "$soldAt" } },
+            sales: { $sum: 1 },
+            revenue: { $sum: "$price" }
+          }
+        },
+        { $sort: { "_id.year": 1, "_id.month": 1 } }
+      ]);
+
+      // User Growth Data (last 6 months)
+      const userGrowth = await User.aggregate([
+        { $match: { createdAt: { $gte: sixMonthsAgo } } },
+        {
+          $group: {
+            _id: { month: { $month: "$createdAt" }, year: { $year: "$createdAt" } },
+            count: { $sum: 1 }
+          }
+        },
+        { $sort: { "_id.year": 1, "_id.month": 1 } }
+      ]);
+
+      // Format data for charts
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - i);
+        months.push({
+          month: d.toLocaleString('default', { month: 'short' }),
+          year: d.getFullYear(),
+          monthNum: d.getMonth() + 1
+        });
+      }
+
+      const formattedSales = months.map(m => {
+        const found = monthlySales.find(s => s._id.month === m.monthNum && s._id.year === m.year);
+        return {
+          month: m.month,
+          sales: found ? found.sales : 0,
+          revenue: found ? found.revenue : 0
+        };
+      });
+
+      const formattedGrowth = months.map(m => {
+        const found = userGrowth.find(g => g._id.month === m.monthNum && g._id.year === m.year);
+        return {
+          month: m.month,
+          count: found ? found.count : 0
+        };
+      });
+
+      res.json({
+        stats: {
+          totalUsers,
+          totalProducts,
+          totalSoldProducts,
+          totalRevenue,
+          activeListings
+        },
+        monthlySales: formattedSales,
+        userGrowth: formattedGrowth
+      });
+    } catch (error) {
+      console.error("Analytics error:", error);
+      res.status(500).json({ error: "Failed to fetch analytics" });
+    }
+  });
+
   app.get("/api/admin/reports", checkAdmin, async (req, res) => {
     try {
       const reports = await Report.find().sort({ createdAt: -1 });
