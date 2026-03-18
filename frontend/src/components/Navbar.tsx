@@ -232,7 +232,7 @@ export default function Navbar() {
             </form>
 
             {/* Search Filter Button */}
-            <div className="relative" ref={filterRef}>
+            <div className="relative mr-4 lg:mr-8" ref={filterRef}>
               <button 
                 onClick={() => {
                   if (window.location.pathname === '/') {

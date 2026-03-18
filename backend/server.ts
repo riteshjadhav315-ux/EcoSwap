@@ -20,6 +20,7 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import { OAuth2Client } from "google-auth-library";
 import Razorpay from "razorpay";
 import crypto from "crypto";
 import { Product } from "./models/Product";
@@ -181,6 +182,56 @@ async function startServer() {
       res.json({ token, user });
     } catch (error) {
       res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  const client = new OAuth2Client(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  );
+
+  app.post("/api/auth/google", async (req, res) => {
+    try {
+      const { code } = req.body;
+      const { tokens } = await client.getToken({
+        code,
+        redirect_uri: "postmessage",
+      });
+      const idToken = tokens.id_token;
+      if (!idToken) return res.status(400).json({ error: "Invalid Google token" });
+
+      const ticket = await client.verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      const payload = ticket.getPayload();
+      if (!payload) return res.status(400).json({ error: "Invalid Google token" });
+
+      const { email, name, picture } = payload;
+
+      let user = await User.findOne({ email });
+
+      if (!user) {
+        const uid = new mongoose.Types.ObjectId().toString();
+        user = new User({
+          uid,
+          email,
+          name,
+          photoURL: picture,
+          provider: "google",
+        });
+        await user.save();
+      } else if (user.provider !== "google") {
+        user.provider = "google";
+        user.photoURL = picture || user.photoURL;
+        await user.save();
+      }
+
+      const token = jwt.sign({ uid: user.uid, role: user.role }, JWT_SECRET);
+      res.json({ token, user });
+    } catch (error) {
+      console.error("Google Auth Error:", error);
+      res.status(500).json({ error: "Google authentication failed" });
     }
   });
 

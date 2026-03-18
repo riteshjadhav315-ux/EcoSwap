@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema({
   location: { type: String, default: '' },
   photoURL: { type: String },
   role: { type: String, default: 'user' },
+  provider: { type: String, default: 'email' },
   createdAt: { type: Date, default: Date.now },
 });
 

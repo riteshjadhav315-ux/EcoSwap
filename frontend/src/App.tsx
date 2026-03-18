@@ -17,6 +17,7 @@ import ScrollToTop from './components/ScrollToTop';
 import { AuthProvider } from './context/AuthContext';
 import { SearchProvider } from './context/SearchContext';
 import { CartProvider } from './context/CartContext';
+import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const AnimatedRoutes = () => {
@@ -60,17 +61,37 @@ const AnimatedRoutes = () => {
 };
 
 function App() {
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+  if (!googleClientId) {
+    console.warn("VITE_GOOGLE_CLIENT_ID is missing. Google Login will be disabled.");
+    return (
+      <AuthProvider>
+        <SearchProvider>
+          <CartProvider>
+            <Router>
+              <ScrollToTop />
+              <AnimatedRoutes />
+            </Router>
+          </CartProvider>
+        </SearchProvider>
+      </AuthProvider>
+    );
+  }
+
   return (
-    <AuthProvider>
-      <SearchProvider>
-        <CartProvider>
-          <Router>
-            <ScrollToTop />
-            <AnimatedRoutes />
-          </Router>
-        </CartProvider>
-      </SearchProvider>
-    </AuthProvider>
+    <GoogleOAuthProvider clientId={googleClientId}>
+      <AuthProvider>
+        <SearchProvider>
+          <CartProvider>
+            <Router>
+              <ScrollToTop />
+              <AnimatedRoutes />
+            </Router>
+          </CartProvider>
+        </SearchProvider>
+      </AuthProvider>
+    </GoogleOAuthProvider>
   );
 }
 

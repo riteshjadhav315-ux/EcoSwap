@@ -3,6 +3,46 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Recycle, ArrowRight, AlertCircle, Loader2, User, Phone, MapPin } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useGoogleLogin } from "@react-oauth/google";
+
+const GoogleLoginButton = ({ setLoading, setError, navigate, redirectPath, login, loading }: any) => {
+  const handleGoogleSignIn = useGoogleLogin({
+    flow: 'auth-code',
+    onSuccess: async (codeResponse) => {
+      setLoading(true);
+      setError("");
+      try {
+        const response = await fetch("/api/auth/google", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: codeResponse.code }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Google login failed");
+
+        login(data.token, data.user);
+        navigate(redirectPath);
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    },
+    onError: () => setError("Google login failed"),
+  });
+
+  return (
+    <button
+      onClick={() => handleGoogleSignIn()}
+      disabled={loading}
+      className="mt-6 w-full py-4 bg-white border border-emerald-100 text-emerald-950 rounded-2xl font-bold hover:bg-emerald-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+    >
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+      Google
+    </button>
+  );
+};
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -20,6 +60,8 @@ export default function Auth() {
 
   const queryParams = new URLSearchParams(routeLocation.search);
   const redirectPath = queryParams.get("redirect") || "/";
+
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,10 +93,6 @@ export default function Auth() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGoogleSignIn = () => {
-    setError("Google Sign-In is currently disabled. Please use email/password.");
   };
 
   return (
@@ -235,14 +273,25 @@ export default function Auth() {
           <div className="flex-1 h-px bg-emerald-100" />
         </div>
 
-        <button
-          onClick={handleGoogleSignIn}
-          disabled={loading}
-          className="mt-6 w-full py-4 bg-white border border-emerald-100 text-emerald-950 rounded-2xl font-bold hover:bg-emerald-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-        >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-          Google
-        </button>
+        {googleClientId ? (
+          <GoogleLoginButton 
+            setLoading={setLoading} 
+            setError={setError} 
+            navigate={navigate} 
+            redirectPath={redirectPath} 
+            login={login}
+            loading={loading}
+          />
+        ) : (
+          <button
+            onClick={() => setError("Google Login is not configured. Please set VITE_GOOGLE_CLIENT_ID in settings.")}
+            disabled={loading}
+            className="mt-6 w-full py-4 bg-white border border-emerald-100 text-emerald-950 rounded-2xl font-bold hover:bg-emerald-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+          >
+            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5 opacity-50" />
+            Google (Not Configured)
+          </button>
+        )}
 
         <div className="mt-8 pt-8 border-t border-emerald-50 text-center">
           <p className="text-emerald-800/60 font-medium">
