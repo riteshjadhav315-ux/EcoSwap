@@ -1,16 +1,10 @@
-import dotenv from "dotenv";
 import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const dotenvPath = path.resolve(__dirname, "./.env");
-dotenv.config({ path: dotenvPath, override: true });
+import dotenv from "dotenv";
+dotenv.config();
 // Silent loading - variables are usually provided by the environment in this platform
 
 import express from "express";
-import { createServer as createViteServer } from "vite";
+//import { createServer as createViteServer } from "vite";
 import mongoose from "mongoose";
 import cors from "cors";
 import multer from "multer";
@@ -44,12 +38,18 @@ async function startServer() {
       origin: "*",
     },
   });
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Middleware
   app.use(cors());
   app.use(express.json());
+  app.get("/api", (req, res) => {
+  res.json({ message: "API is working 🚀" });
+  });
   app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+  app.get("*", (req, res) => {
+  res.sendFile(path.resolve(distPath, "index.html"));
+});
 
   // Cloudinary Configuration
   cloudinary.config({
@@ -1166,32 +1166,9 @@ async function startServer() {
     next(err);
   });
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    try {
-      console.log("Initializing Vite middleware...");
-      const vite = await createViteServer({
-        server: { 
-          middlewareMode: true,
-          hmr: false,
-          watch: null,
-        },
-        appType: "spa",
-        root: path.resolve(__dirname, "../frontend"),
-      });
-      app.use(vite.middlewares);
-      console.log("Vite middleware attached");
-    } catch (viteError) {
-      console.error("Vite failed to start:", viteError);
-    }
-  } else {
-    // Serve static files in production
-    const distPath = path.resolve(__dirname, "../frontend/dist");
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.resolve(distPath, "index.html"));
-    });
-  }
+  const distPath = path.resolve(__dirname, "../frontend/dist");
+app.use(express.static(distPath));
+
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
