@@ -4,6 +4,7 @@ import { Send, ArrowLeft, Loader2, ShoppingBag } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { getMessages, sendMessage, Chat as ChatType, Message, socket } from "../services/chatService";
+import { apiFetch } from "services/api";
 
 export default function Chat() {
   const { id: chatId } = useParams<{ id: string }>();
@@ -25,7 +26,7 @@ export default function Chat() {
 
     const fetchChatAndMessages = async () => {
       try {
-        const response = await fetch(`/api/chats/${chatId}`);
+        const response = await apiFetch(`/api/chats/${chatId}`);
         if (!response.ok) throw new Error("Chat not found");
         const chatData = await response.json();
         
