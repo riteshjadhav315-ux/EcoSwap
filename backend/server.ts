@@ -695,27 +695,47 @@ async function startServer() {
   });
 
   app.post("/api/chats", async (req, res) => {
-    try {
-      const { productId, buyerId, buyerName, sellerId, sellerName, productTitle, productImageUrl } = req.body;
-      let chat = await Chat.findOne({ productId, buyerId });
-      if (!chat) {
-        chat = new Chat({
-          productId,
-          buyerId,
-          buyerName,
-          sellerId,
-          sellerName,
-          productTitle,
-          productImageUrl,
-          participants: [buyerId, sellerId],
-        });
-        await chat.save();
-      }
-      res.json(chat);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to start chat" });
+  try {
+    const {
+      productId,
+      buyerId,
+      buyerName,
+      sellerId,
+      sellerName,
+      productTitle,
+      productImageUrl,
+    } = req.body;
+
+    // ✅ FIX: check both buyer + seller + product
+    let chat = await Chat.findOne({
+      productId,
+      buyerId,
+      sellerId,
+    });
+
+    if (!chat) {
+      chat = new Chat({
+        productId,
+        buyerId,
+        buyerName,
+        sellerId,
+        sellerName,
+        productTitle,
+        productImageUrl,
+        participants: [buyerId, sellerId], // ✅ IMPORTANT
+        lastMessage: "",
+        lastMessageAt: new Date(),
+      });
+
+      await chat.save();
     }
-  });
+
+    res.json(chat);
+  } catch (error) {
+    console.error("CREATE CHAT ERROR:", error);
+    res.status(500).json({ error: "Failed to start chat" });
+  }
+});
 
   app.get("/api/chats/:id", async (req, res) => {
     try {
@@ -749,21 +769,25 @@ async function startServer() {
   });
 
   app.post("/api/chats/:id/messages", async (req, res) => {
-    try {
-      const message = new Message({
-        chatId: req.params.id,
-        ...req.body,
-      });
-      await message.save();
-      await Chat.findByIdAndUpdate(req.params.id, {
-        lastMessage: message.text,
-        lastMessageAt: message.createdAt,
-      });
-      res.json(message);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to send message" });
-    }
-  });
+  try {
+    const message = new Message({
+      chatId: new mongoose.Types.ObjectId(req.params.id), // ✅ FIX
+      ...req.body,
+    });
+
+    await message.save();
+
+    await Chat.findByIdAndUpdate(req.params.id, {
+      lastMessage: message.text,
+      lastMessageAt: message.createdAt,
+    });
+
+    res.json(message);
+  } catch (error) {
+    console.error("SEND MESSAGE ERROR:", error);
+    res.status(500).json({ error: "Failed to send message" });
+  }
+});
 
   // Dashboard APIs
   app.get("/api/dashboard/summary", authenticate, async (req: any, res) => {
