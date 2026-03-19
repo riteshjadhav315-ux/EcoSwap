@@ -12,7 +12,7 @@ const GoogleLoginButton = ({ setLoading, setError, navigate, redirectPath, login
       setLoading(true);
       setError("");
       try {
-        const response = await fetch("https://ecoswap-backend-ows2.onrender.com", {
+        const response = await fetch("https://ecoswap-backend-ows2.onrender.com/api/auth/google", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code: codeResponse.code }),
