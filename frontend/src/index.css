@@ -1,11 +1,19 @@
-/* Simple CSS without Tailwind */
-
-:root {
-  font-family: Arial, sans-serif;
-}
-
 body {
   margin: 0;
-  background-color: #f5f5f5;
-  color: #222;
+  font-family: Arial, sans-serif;
+  background-color: #f8fafc;
+  color: #111;
+}
+
+button {
+  padding: 10px 16px;
+  border: none;
+  background-color: #2563eb;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #1d4ed8;
 }
