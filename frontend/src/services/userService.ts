@@ -1,4 +1,4 @@
-const API_URL = "const API_URL = "https://ecoswap-backend-ows2.onrender.com/api";";
+const API_URL = "https://ecoswap-backend-ows2.onrender.com/api";
 
 export interface UserProfile {
   uid: string;

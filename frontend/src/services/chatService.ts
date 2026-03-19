@@ -1,8 +1,8 @@
 import { io } from "socket.io-client";
 import { Product } from "../types";
 
-const API_URL = "const API_URL = "https://ecoswap-backend-ows2.onrender.com/api";";
-export const socket = io();
+const API_URL = "https://ecoswap-backend-ows2.onrender.com/api";
+export const socket = io("https://ecoswap-backend-ows2.onrender.com");
 
 export interface Chat {
   id: string;
