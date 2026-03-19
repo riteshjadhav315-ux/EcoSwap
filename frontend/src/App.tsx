@@ -20,6 +20,9 @@ import { CartProvider } from './context/CartContext';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AnimatePresence, motion } from 'framer-motion';
 
+<h1 className="text-red-500 text-5xl font-bold">
+  Tailwind Test
+</h1>
 const AnimatedRoutes = () => {
   const location = useLocation();
   // Hide footer on both individual chat and chats list
