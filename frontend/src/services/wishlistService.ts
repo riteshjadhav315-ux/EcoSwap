@@ -1,4 +1,4 @@
-const API_URL = "/api";
+const API_URL = "const API_URL = "https://ecoswap-backend-ows2.onrender.com/api";";
 
 export interface WishlistItem {
   id?: string;
