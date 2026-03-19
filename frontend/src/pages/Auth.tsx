@@ -12,7 +12,7 @@ const GoogleLoginButton = ({ setLoading, setError, navigate, redirectPath, login
       setLoading(true);
       setError("");
       try {
-        const response = await fetch('${import.meta.env.VITE_API_URL}/api/auth/google', {
+        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/google`{
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code: codeResponse.code }),
@@ -64,36 +64,45 @@ export default function Auth() {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setLoading(true);
+  e.preventDefault();
+  setError("");
+  setLoading(true);
 
-    try {
-      const endpoint = isLogin ? '${import.meta.env.VITE_API_URL}/api/auth/login" : "/api/auth/register':
-      const body = isLogin 
-        ? { email, password } 
-        : { email, password, name: `${firstName} ${lastName}`, phone, location };
+  try {
+    const endpoint = isLogin
+      ? `${import.meta.env.VITE_API_URL}/api/auth/login`
+      : `${import.meta.env.VITE_API_URL}/api/auth/register`;
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+    const body = isLogin
+      ? { email, password }
+      : {
+          email,
+          password,
+          name: `${firstName} ${lastName}`,
+          phone,
+          location,
+        };
 
-      const data = await response.json();
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
 
-      if (!response.ok) {
-        throw new Error(data.error || "Authentication failed");
-      }
+    const data = await response.json();
 
-      login(data.token, data.user);
-      navigate(redirectPath);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    if (!response.ok) {
+      throw new Error(data.error || "Authentication failed");
     }
-  };
+
+    login(data.token, data.user);
+    navigate(redirectPath);
+  } catch (err: any) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen bg-emerald-50/30 flex items-center justify-center p-4">
