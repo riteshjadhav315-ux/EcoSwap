@@ -46,10 +46,6 @@ async function startServer() {
   app.get("/api", (req, res) => {
   res.json({ message: "API is working 🚀" });
   });
-  app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
-  app.get("*", (req, res) => {
-  res.sendFile(path.resolve(distPath, "index.html"));
-});
 
   // Cloudinary Configuration
   cloudinary.config({
