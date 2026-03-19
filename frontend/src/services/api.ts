@@ -12,15 +12,18 @@ export const apiFetch = async (endpoint: string, options: any = {}) => {
     },
   });
 
+  const text = await response.text();
+
   let data;
   try {
-    data = await response.json();
+    data = JSON.parse(text);
   } catch {
-    throw new Error("Invalid server response");
+    console.error("❌ Not JSON response:", text);
+    throw new Error("Server returned invalid response");
   }
 
   if (!response.ok) {
-    throw new Error(data.error || "Something went wrong");
+    throw new Error(data.error || "API error");
   }
 
   return data;
