@@ -12,7 +12,7 @@ const GoogleLoginButton = ({ setLoading, setError, navigate, redirectPath, login
       setLoading(true);
       setError("");
       try {
-        const response = await fetch("${process.env.VITE_API_URL}/api/auth/google", {
+        const response = await fetch('${import.meta.env.VITE_API_URL}/api/auth/google', {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ code: codeResponse.code }),
@@ -69,7 +69,7 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      const endpoint = isLogin ? "${process.env.VITE_API_URL}/api/auth/login" : "/api/auth/register";
+      const endpoint = isLogin ? '${import.meta.env.VITE_API_URL}/api/auth/login" : "/api/auth/register';
       const body = isLogin 
         ? { email, password } 
         : { email, password, name: `${firstName} ${lastName}`, phone, location };
