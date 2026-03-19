@@ -1,4 +1,4 @@
-const BASE_URL = "https://ecoswap-backend-ows2.onrender.com"; // 🔥 put your real backend URL
+const BASE_URL = "https://ecoswap-backend-ows2.onrender.com"; // 
 
 export const apiFetch = async (endpoint: string, options: any = {}) => {
   const token = localStorage.getItem("token");

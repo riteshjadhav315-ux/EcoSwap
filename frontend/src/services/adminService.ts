@@ -1,123 +1,31 @@
+import { apiFetch } from "./api";
+
 export const adminService = {
-  getAnalytics: async () => {
-    const token = localStorage.getItem("token");
-    const response = await fetch("/api/admin/analytics", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error("Failed to fetch analytics");
-    }
-    return response.json();
-  },
+  getAnalytics: () => apiFetch("/api/admin/analytics"),
 
-  getStats: async () => {
-    const token = localStorage.getItem("token");
-    const response = await fetch("/api/admin/stats", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error("Failed to fetch stats");
-    }
-    return response.json();
-  },
+  getStats: () => apiFetch("/api/admin/stats"),
 
-  getUsers: async () => {
-    const token = localStorage.getItem("token");
-    const response = await fetch("/api/admin/users", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error("Failed to fetch users");
-    }
-    return response.json();
-  },
+  getUsers: () => apiFetch("/api/admin/users"),
 
-  getProducts: async () => {
-    const token = localStorage.getItem("token");
-    const response = await fetch("/api/admin/products", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error("Failed to fetch products");
-    }
-    return response.json();
-  },
+  getProducts: () => apiFetch("/api/admin/products"),
 
-  getPayments: async () => {
-    const token = localStorage.getItem("token");
-    const response = await fetch("/api/admin/payments", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error("Failed to fetch payments");
-    }
-    return response.json();
-  },
+  getPayments: () => apiFetch("/api/admin/payments"),
 
-  getReports: async () => {
-    const token = localStorage.getItem("token");
-    const response = await fetch("/api/admin/reports", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error("Failed to fetch reports");
-    }
-    return response.json();
-  },
+  getReports: () => apiFetch("/api/admin/reports"),
 
-  updateUserRole: async (uid: string, role: string) => {
-    const token = localStorage.getItem("token");
-    const response = await fetch(`/api/admin/users/${uid}/role`, {
+  updateUserRole: (uid: string, role: string) =>
+    apiFetch(`/api/admin/users/${uid}/role`, {
       method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({ role }),
-    });
-    if (!response.ok) {
-      throw new Error("Failed to update user role");
-    }
-    return response.json();
-  },
+    }),
 
-  deleteUser: async (uid: string) => {
-    const token = localStorage.getItem("token");
-    const response = await fetch(`/api/admin/users/${uid}`, {
+  deleteUser: (uid: string) =>
+    apiFetch(`/api/admin/users/${uid}`, {
       method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error("Failed to delete user");
-    }
-    return response.json();
-  },
+    }),
 
-  resolveReport: async (reportId: string) => {
-    const token = localStorage.getItem("token");
-    const response = await fetch(`/api/admin/reports/${reportId}/resolve`, {
+  resolveReport: (reportId: string) =>
+    apiFetch(`/api/admin/reports/${reportId}/resolve`, {
       method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    if (!response.ok) {
-      throw new Error("Failed to resolve report");
-    }
-    return response.json();
-  },
+    }),
 };
