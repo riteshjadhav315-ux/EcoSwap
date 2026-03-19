@@ -728,12 +728,24 @@ async function startServer() {
   });
 
   app.get("/api/chats/:id/messages", async (req, res) => {
-    try {
-      const messages = await Message.find({ chatId: req.params.id }).sort({ createdAt: 1 });
-      res.json(messages);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to fetch messages" });
+  try {
+    const { id } = req.params;
+
+    // ✅ Check valid Mongo ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid chat ID" });
     }
+
+    // ✅ Convert to ObjectId
+    const messages = await Message.find({
+      chatId: new mongoose.Types.ObjectId(id),
+    }).sort({ createdAt: 1 });
+
+    res.json(messages);
+  } catch (error) {
+    console.error("GET MESSAGES ERROR:", error);
+    res.status(500).json({ error: "Failed to fetch messages" });
+  }
   });
 
   app.post("/api/chats/:id/messages", async (req, res) => {
