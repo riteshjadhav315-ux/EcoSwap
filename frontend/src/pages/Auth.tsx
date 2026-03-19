@@ -69,7 +69,7 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      const endpoint = isLogin ? '${import.meta.env.VITE_API_URL}/api/auth/login" : "/api/auth/register';
+      const endpoint = isLogin ? '${import.meta.env.VITE_API_URL}/api/auth/login" : "/api/auth/register':
       const body = isLogin 
         ? { email, password } 
         : { email, password, name: `${firstName} ${lastName}`, phone, location };
