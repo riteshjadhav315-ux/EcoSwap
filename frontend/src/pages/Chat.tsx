@@ -4,7 +4,7 @@ import { Send, ArrowLeft, Loader2, ShoppingBag } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
 import { getMessages, sendMessage, Chat as ChatType, Message, socket } from "../services/chatService";
-import { apiFetch } from "services/api";
+import { apiFetch } from "../services/api";
 
 export default function Chat() {
   const { id: chatId } = useParams<{ id: string }>();
