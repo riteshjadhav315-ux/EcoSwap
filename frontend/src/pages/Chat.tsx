@@ -26,11 +26,9 @@ export default function Chat() {
 
     const fetchChatAndMessages = async () => {
       try {
-        const response = await apiFetch(`/api/chats/${chatId}`);
-        if (!response.ok) throw new Error("Chat not found");
-        const chatData = await response.json();
+        const chatData = await apiFetch<any>(`/api/chats/${chatId}`);
         
-        if (!chatData.participants.includes(user.uid)) {
+        if (!chatData.participants?.includes(user.uid)) {
           navigate("/");
           return;
         }
@@ -52,7 +50,7 @@ export default function Chat() {
     socket.emit("join_chat", chatId);
 
     const handleNewMessage = (msg: any) => {
-      if (msg.chatId === chatId) {
+      if (String(msg.chatId) === chatId) {
         setMessages(prev => [...prev, { ...msg, id: msg._id }]);
         setTimeout(scrollToBottom, 100);
       }

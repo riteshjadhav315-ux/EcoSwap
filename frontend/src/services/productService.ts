@@ -1,152 +1,152 @@
 import { Product } from "../types";
+import { apiFetch } from "./api";
 
-const API_URL = "https://ecoswap-backend-ows2.onrender.com/api";
-
-const getAuthHeader = () => {
-  const token = localStorage.getItem("token");
-  return token ? { "Authorization": `Bearer ${token}` } : {};
-};
-
-export const uploadProductImage = async (file: File, productId: string, userId: string) => {
+export const uploadProductImage = async (
+  file: File,
+  _productId: string,
+  _userId: string
+) => {
   const formData = new FormData();
   formData.append("file", file);
-  
-  const response = await fetch(`${API_URL}/upload`, {
+
+  const data = await apiFetch<{ url: string }>("/api/upload", {
     method: "POST",
-    headers: getAuthHeader(),
     body: formData,
   });
-  
-  if (!response.ok) throw new Error("Failed to upload image");
-  const data = await response.json();
+
   return data.url;
 };
 
-export const createProduct = async (productData: Omit<Product, "id" | "createdAt" | "sellerId"> & { sellerId?: string }) => {
-  const response = await fetch(`${API_URL}/products`, {
+export const createProduct = async (
+  productData: Omit<Product, "id" | "createdAt" | "sellerId"> & { sellerId?: string }
+) => {
+  const data = await apiFetch<{ _id: string }>("/api/products", {
     method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-      ...getAuthHeader()
-    },
     body: JSON.stringify(productData),
   });
-  
-  if (!response.ok) throw new Error("Failed to create product");
-  const data = await response.json();
+
   return data._id;
 };
 
 export const createProductWithImages = async (formData: FormData) => {
-  const response = await fetch(`${API_URL}/products`, {
+  return apiFetch("/api/products", {
     method: "POST",
-    headers: getAuthHeader(),
     body: formData,
   });
-  
-  if (!response.ok) throw new Error("Failed to create product");
-  return response.json();
 };
 
 export const updateProductWithImages = async (productId: string, formData: FormData) => {
-  const response = await fetch(`${API_URL}/products/${productId}`, {
+  return apiFetch(`/api/products/${productId}`, {
     method: "PATCH",
-    headers: getAuthHeader(),
     body: formData,
   });
-  
-  if (!response.ok) throw new Error("Failed to update product");
-  return response.json();
 };
 
 export const getUserProducts = async (userId?: string) => {
-  const url = userId ? `${API_URL}/products?sellerId=${userId}` : `${API_URL}/products/my`;
-  const response = await fetch(url, {
-    headers: getAuthHeader()
-  });
-  if (!response.ok) throw new Error("Failed to fetch user products");
-  const data = await response.json();
-  return data.map((p: any) => ({ ...p, id: p._id }));
+  const endpoint = userId
+    ? `/api/products?sellerId=${encodeURIComponent(userId)}`
+    : "/api/products/my";
+  const data = await apiFetch<any[]>(endpoint);
+
+  return data.map((product) => ({ ...product, id: product._id }));
 };
 
 export const getSoldProducts = async () => {
-  const response = await fetch(`${API_URL}/products/sold`, {
-    headers: getAuthHeader()
-  });
-  if (!response.ok) throw new Error("Failed to fetch sold products");
-  const data = await response.json();
-  return data.map((p: any) => ({ ...p, id: p._id }));
+  const data = await apiFetch<any[]>("/api/products/sold");
+  return data.map((product) => ({ ...product, id: product._id }));
 };
 
 export const getAllProducts = async () => {
-  const response = await fetch(`${API_URL}/products`);
-  if (!response.ok) throw new Error("Failed to fetch products");
-  const data = await response.json();
-  return data.map((p: any) => ({ ...p, id: p._id }));
+  const data = await apiFetch<any[]>("/api/products");
+  return data.map((product) => ({ ...product, id: product._id }));
 };
 
-export const getFilteredProducts = async (category?: string, searchQuery?: string, location?: string) => {
-  let url = `${API_URL}/products?`;
-  if (category && category !== "All") url += `category=${category}&`;
-  if (searchQuery) url += `search=${searchQuery}&`;
-  if (location && location !== "All Locations") url += `location=${location}`;
-  
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Failed to fetch filtered products");
-  const data = await response.json();
-  return data.map((p: any) => ({ ...p, id: p._id }));
+export const getFilteredProducts = async (
+  category?: string,
+  searchQuery?: string,
+  location?: string
+) => {
+  const params = new URLSearchParams();
+
+  if (category && category !== "All") {
+    params.set("category", category);
+  }
+
+  if (searchQuery) {
+    params.set("search", searchQuery);
+  }
+
+  if (location && location !== "All Locations") {
+    params.set("location", location);
+  }
+
+  const query = params.toString();
+  const data = await apiFetch<any[]>(`/api/products${query ? `?${query}` : ""}`);
+  return data.map((product) => ({ ...product, id: product._id }));
 };
 
 export const deleteProduct = async (productId: string) => {
-  const response = await fetch(`${API_URL}/products/${productId}`, {
+  await apiFetch(`/api/products/${productId}`, {
     method: "DELETE",
-    headers: getAuthHeader(),
   });
-  if (!response.ok) throw new Error("Failed to delete product");
 };
 
-export const updateProductStatus = async (productId: string, status: 'available' | 'sold') => {
-  const response = await fetch(`${API_URL}/products/${productId}`, {
+export const updateProductStatus = async (
+  productId: string,
+  status: "available" | "sold"
+) => {
+  await apiFetch(`/api/products/${productId}`, {
     method: "PATCH",
-    headers: { 
-      "Content-Type": "application/json",
-      ...getAuthHeader()
-    },
     body: JSON.stringify({ status }),
   });
-  if (!response.ok) throw new Error("Failed to update product status");
 };
 
-export const updateProduct = async (productId: string, productData: Partial<Product>) => {
-  const response = await fetch(`${API_URL}/products/${productId}`, {
+export const updateProduct = async (
+  productId: string,
+  productData: Partial<Product>
+) => {
+  return apiFetch(`/api/products/${productId}`, {
     method: "PATCH",
-    headers: { 
-      "Content-Type": "application/json",
-      ...getAuthHeader()
-    },
     body: JSON.stringify(productData),
   });
-  if (!response.ok) throw new Error("Failed to update product");
-  return response.json();
 };
 
 export const getProductById = async (productId: string) => {
-  const response = await fetch(`${API_URL}/products/${productId}`);
-  if (!response.ok) return null;
-  const data = await response.json();
-  return { ...data, id: data._id };
+  try {
+    const data = await apiFetch<any>(`/api/products/${productId}`);
+    return { ...data, id: data._id };
+  } catch {
+    return null;
+  }
 };
 
-export const searchProducts = async (query: string, filters?: { category?: string, minPrice?: number, maxPrice?: number, location?: string }) => {
-  let url = `${API_URL}/products/search?query=${encodeURIComponent(query)}`;
-  if (filters) {
-    if (filters.category && filters.category !== "All") url += `&category=${filters.category}`;
-    if (filters.minPrice) url += `&minPrice=${filters.minPrice}`;
-    if (filters.maxPrice) url += `&maxPrice=${filters.maxPrice}`;
-    if (filters.location) url += `&location=${filters.location}`;
+export const searchProducts = async (
+  query: string,
+  filters?: {
+    category?: string;
+    minPrice?: number;
+    maxPrice?: number;
+    location?: string;
   }
-  const response = await fetch(url);
-  if (!response.ok) throw new Error("Search failed");
-  const data = await response.json();
-  return data.map((p: any) => ({ ...p, id: p._id }));
+) => {
+  const params = new URLSearchParams({ query });
+
+  if (filters?.category && filters.category !== "All") {
+    params.set("category", filters.category);
+  }
+
+  if (filters?.minPrice) {
+    params.set("minPrice", String(filters.minPrice));
+  }
+
+  if (filters?.maxPrice) {
+    params.set("maxPrice", String(filters.maxPrice));
+  }
+
+  if (filters?.location) {
+    params.set("location", filters.location);
+  }
+
+  const data = await apiFetch<any[]>(`/api/products/search?${params.toString()}`);
+  return data.map((product) => ({ ...product, id: product._id }));
 };

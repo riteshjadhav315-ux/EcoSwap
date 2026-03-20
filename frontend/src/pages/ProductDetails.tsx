@@ -13,6 +13,7 @@ import { StarRating } from "../components/StarRating";
 import { ReviewList } from "../components/ReviewList";
 import { ReviewForm } from "../components/ReviewForm";
 import { Product } from "../types";
+import { apiFetch } from "../services/api";
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -101,7 +102,7 @@ export default function ProductDetails() {
           productId: id,
           productTitle: product.title,
           productPrice: product.price,
-          productImageUrl: product.imageUrl
+          productImageUrl: product.imageUrl || product.images?.[0] || ""
         });
         setWishlistId(newWishId);
       }
@@ -135,6 +136,7 @@ export default function ProductDetails() {
   };
 
   const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [postPaymentChatId, setPostPaymentChatId] = useState<string | null>(null);
 
   const handlePaymentSuccess = async (response: any, isSimulation = false) => {
     try {
@@ -147,13 +149,23 @@ export default function ProductDetails() {
       });
       
       // 4. Success
+      let nextChatId: string | null = null;
       if (product) {
         setProduct({ ...product, status: 'sold' });
+
+        if (user && user.uid !== product.sellerId) {
+          try {
+            nextChatId = await startChat(product, user.uid, user.name || "User");
+            setPostPaymentChatId(nextChatId);
+          } catch (chatError) {
+            console.error("Error creating post-payment chat:", chatError);
+          }
+        }
       }
       setPaymentSuccess(true);
       // Optional: navigate after a delay
       setTimeout(() => {
-        navigate("/chats");
+        navigate(nextChatId ? `/chat/${nextChatId}` : "/chats");
       }, 3000);
     } catch (err) {
       console.error("Payment verification error:", err);
@@ -285,10 +297,10 @@ export default function ProductDetails() {
               <p className="text-emerald-700/70 font-medium mb-8">Your purchase is complete. You can now chat with the seller to arrange pickup.</p>
               <div className="space-y-3">
                 <button 
-                  onClick={() => navigate("/chats")}
+                  onClick={() => navigate(postPaymentChatId ? `/chat/${postPaymentChatId}` : "/chats")}
                   className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
                 >
-                  Go to Chats
+                  {postPaymentChatId ? "Open Chat" : "Go to Chats"}
                 </button>
               </div>
             </div>
@@ -550,9 +562,8 @@ export default function ProductDetails() {
                       const description = window.prompt("Please provide more details (optional):");
                       
                       try {
-                        const res = await fetch("/api/reports", {
+                        await apiFetch("/api/reports", {
                           method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             reporterId: user.uid,
                             targetId: id,
@@ -561,7 +572,7 @@ export default function ProductDetails() {
                             description
                           })
                         });
-                        if (res.ok) alert("Report submitted successfully.");
+                        alert("Report submitted successfully.");
                       } catch (err) {
                         console.error("Error reporting product:", err);
                       }

@@ -14,6 +14,7 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { adminService } from "../services/adminService";
+import { apiFetch } from "../services/api";
 
 interface AnalyticsData {
   stats: {
@@ -122,19 +123,11 @@ export default function AdminDashboard() {
 
   const handleUpdateRole = async (uid: string, newRole: string) => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/admin/users/${uid}/role`, {
+      await apiFetch(`/api/admin/users/${uid}/role`, {
         method: 'PATCH',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({ role: newRole })
       });
-
-      if (res.ok) {
-        setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
-      }
+      setUsers(users.map(u => u.uid === uid ? { ...u, role: newRole } : u));
     } catch (error) {
       console.error("Error updating role:", error);
     }
@@ -143,15 +136,10 @@ export default function AdminDashboard() {
   const handleDeleteProduct = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this product?")) return;
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/products/${id}`, {
+      await apiFetch(`/api/products/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      if (res.ok) {
-        setProducts(products.filter(p => p._id !== id));
-      }
+      setProducts(products.filter(p => p._id !== id));
     } catch (error) {
       console.error("Error deleting product:", error);
     }
@@ -160,62 +148,42 @@ export default function AdminDashboard() {
   const handleDeleteUser = async (uid: string) => {
     if (!window.confirm("Are you sure you want to remove this user? This action cannot be undone.")) return;
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/admin/users/${uid}`, {
+      await apiFetch(`/api/admin/users/${uid}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      if (res.ok) {
-        setUsers(users.filter(u => u.uid !== uid));
-      } else {
-        const errorData = await res.json();
-        alert(errorData.error || "Failed to delete user");
-      }
+      setUsers(users.filter(u => u.uid !== uid));
     } catch (error) {
       console.error("Error deleting user:", error);
-      alert("An error occurred while deleting the user");
+      alert(error instanceof Error ? error.message : "An error occurred while deleting the user");
     }
   };
 
   const handleDeleteReportTarget = async (targetId: string, targetType: 'product' | 'user') => {
     if (!window.confirm(`Are you sure you want to delete this ${targetType}?`)) return;
     try {
-      const token = localStorage.getItem("token");
       const url = targetType === 'product' ? `/api/products/${targetId}` : `/api/admin/users/${targetId}`;
-      const res = await fetch(url, {
+      await apiFetch(url, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
 
-      if (res.ok) {
-        if (targetType === 'product') {
-          setProducts(products.filter(p => p._id !== targetId));
-        } else {
-          setUsers(users.filter(u => u.uid !== targetId));
-        }
-        alert(`${targetType.charAt(0).toUpperCase() + targetType.slice(1)} deleted successfully`);
+      if (targetType === 'product') {
+        setProducts(products.filter(p => p._id !== targetId));
       } else {
-        const errorData = await res.json();
-        alert(errorData.error || `Failed to delete ${targetType}`);
+        setUsers(users.filter(u => u.uid !== targetId));
       }
+      alert(`${targetType.charAt(0).toUpperCase() + targetType.slice(1)} deleted successfully`);
     } catch (error) {
       console.error(`Error deleting ${targetType}:`, error);
-      alert(`An error occurred while deleting the ${targetType}`);
+      alert(error instanceof Error ? error.message : `An error occurred while deleting the ${targetType}`);
     }
   };
 
   const handleResolveReport = async (reportId: string) => {
     try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`/api/admin/reports/${reportId}/resolve`, {
+      await apiFetch(`/api/admin/reports/${reportId}/resolve`, {
         method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      if (res.ok) {
-        setReports(reports.map(r => r._id === reportId ? { ...r, status: 'resolved' } : r));
-      }
+      setReports(reports.map(r => r._id === reportId ? { ...r, status: 'resolved' } : r));
     } catch (error) {
       console.error("Error resolving report:", error);
     }

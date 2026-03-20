@@ -8,7 +8,7 @@ const paymentSchema = new mongoose.Schema({
   buyerId: { type: String, required: true },
   amount: { type: Number, required: true },
   currency: { type: String, default: 'INR' },
-  status: { type: String, default: 'captured' },
+  status: { type: String, default: 'completed' },
   createdAt: { type: Date, default: Date.now },
 });
 

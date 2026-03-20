@@ -1,46 +1,21 @@
-const API_URL = "https://ecoswap-backend-ows2.onrender.com/api";
-
-const getAuthHeader = () => {
-  const token = localStorage.getItem("token");
-  return token ? { "Authorization": `Bearer ${token}` } : {};
-};
+import { apiFetch } from "./api";
 
 export const getDashboardSummary = async () => {
-  const response = await fetch(`${API_URL}/dashboard/summary`, {
-    headers: getAuthHeader()
-  });
-  if (!response.ok) throw new Error("Failed to fetch dashboard summary");
-  return response.json();
+  return apiFetch("/api/dashboard/summary");
 };
 
 export const getMyPurchases = async () => {
-  const response = await fetch(`${API_URL}/payments/my`, {
-    headers: getAuthHeader()
-  });
-  if (!response.ok) throw new Error("Failed to fetch purchases");
-  return response.json();
+  return apiFetch("/api/payments/my");
 };
 
 export const getMyWishlist = async () => {
-  const response = await fetch(`${API_URL}/wishlist/my`, {
-    headers: getAuthHeader()
-  });
-  if (!response.ok) throw new Error("Failed to fetch wishlist");
-  return response.json();
+  return apiFetch("/api/wishlist/my");
 };
 
 export const getMyReviews = async () => {
-  const response = await fetch(`${API_URL}/reviews/my`, {
-    headers: getAuthHeader()
-  });
-  if (!response.ok) throw new Error("Failed to fetch reviews");
-  return response.json();
+  return apiFetch("/api/reviews/my");
 };
 
 export const getMyNotifications = async () => {
-  const response = await fetch(`${API_URL}/notifications/my`, {
-    headers: getAuthHeader()
-  });
-  if (!response.ok) throw new Error("Failed to fetch notifications");
-  return response.json();
+  return apiFetch("/api/notifications/my");
 };

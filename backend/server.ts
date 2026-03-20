@@ -687,6 +687,9 @@ async function startServer() {
   app.get("/api/chats", async (req, res) => {
     try {
       const { userId } = req.query;
+      if (!userId || typeof userId !== "string") {
+        return res.status(400).json({ error: "Missing required query parameter: userId" });
+      }
       const chats = await Chat.find({ participants: userId }).sort({ lastMessageAt: -1 });
       res.json(chats);
     } catch (error) {
@@ -705,6 +708,10 @@ async function startServer() {
       productTitle,
       productImageUrl,
     } = req.body;
+
+    if (!productId || !buyerId || !sellerId || !productTitle) {
+      return res.status(400).json({ error: "Missing required chat fields" });
+    }
 
     // ✅ FIX: check both buyer + seller + product
     let chat = await Chat.findOne({
@@ -739,6 +746,9 @@ async function startServer() {
 
   app.get("/api/chats/:id", async (req, res) => {
     try {
+      if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+        return res.status(400).json({ error: "Invalid chat ID" });
+      }
       const chat = await Chat.findById(req.params.id);
       if (!chat) return res.status(404).json({ error: "Chat not found" });
       res.json(chat);
@@ -750,6 +760,13 @@ async function startServer() {
   app.get("/api/chats/:id/messages", async (req, res) => {
   try {
     const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "Invalid chat ID" });
+    }
+    const chat = await Chat.findById(id);
+    if (!chat) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
 
     // ✅ Check valid Mongo ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -770,6 +787,15 @@ async function startServer() {
 
   app.post("/api/chats/:id/messages", async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid chat ID" });
+    }
+
+    const chat = await Chat.findById(req.params.id);
+    if (!chat) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+
     const message = new Message({
       chatId: new mongoose.Types.ObjectId(req.params.id), // ✅ FIX
       ...req.body,
@@ -999,8 +1025,17 @@ async function startServer() {
   app.post("/api/payment/create-order", authenticate, async (req: any, res) => {
     try {
       const { productId } = req.body;
+      if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+        return res.status(400).json({ error: "Invalid product ID" });
+      }
       const product = await Product.findById(productId);
       if (!product) return res.status(404).json({ error: "Product not found" });
+      if (product.status === "sold") {
+        return res.status(409).json({ error: "This product has already been sold" });
+      }
+      if (product.sellerId === req.user.uid) {
+        return res.status(400).json({ error: "You cannot buy your own product" });
+      }
 
       const options = {
         amount: Math.round(product.price * 100), // amount in the smallest currency unit (paise)
@@ -1019,6 +1054,15 @@ async function startServer() {
   const moveProductToSold = async (productId: string, buyerId?: string, buyerName?: string) => {
     const product = await Product.findById(productId);
     if (!product) throw new Error("Product not found");
+
+    const existingSoldProduct = await SoldProduct.findOne({ productId: product._id });
+    if (existingSoldProduct) {
+      if (product.status !== "sold") {
+        product.status = "sold";
+        await product.save();
+      }
+      return existingSoldProduct;
+    }
 
     // Create sold product entry
     const soldProduct = new SoldProduct({
@@ -1056,6 +1100,32 @@ async function startServer() {
       console.error(`Product ${productId} not found during payment processing`);
       throw new Error("Product not found");
     }
+    if (product.sellerId === buyerId) {
+      throw new Error("You cannot buy your own product");
+    }
+
+    const paymentLookup: Record<string, string>[] = [];
+    if (paymentDetails.razorpay_payment_id) {
+      paymentLookup.push({ paymentId: paymentDetails.razorpay_payment_id });
+    }
+    if (paymentDetails.razorpay_order_id) {
+      paymentLookup.push({ orderId: paymentDetails.razorpay_order_id });
+    }
+
+    if (paymentLookup.length > 0) {
+      const existingPayment = await Payment.findOne({ $or: paymentLookup });
+      if (existingPayment) {
+        return {
+          success: true,
+          message: "Payment already processed",
+          paymentId: existingPayment.paymentId,
+        };
+      }
+    }
+
+    if (product.status === "sold") {
+      throw new Error("This product has already been sold");
+    }
 
     // Create payment record
     const payment = new Payment({
@@ -1065,6 +1135,7 @@ async function startServer() {
       productId,
       buyerId,
       amount: product.price,
+      currency: "INR",
       status: "completed"
     });
     
@@ -1110,6 +1181,9 @@ async function startServer() {
       if (!productId) {
         return res.status(400).json({ error: "Missing required field: productId" });
       }
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        return res.status(400).json({ error: "Invalid product ID" });
+      }
 
       // Allow simulation in test mode or if explicitly requested
       const isTestMode = (process.env.RAZORPAY_KEY_ID || "").startsWith("rzp_test_");
@@ -1149,7 +1223,14 @@ async function startServer() {
       }
     } catch (error) {
       console.error("Error verifying payment:", error);
-      res.status(500).json({ error: "Payment verification failed", details: error instanceof Error ? error.message : String(error) });
+      const message = error instanceof Error ? error.message : String(error);
+      if (message === "This product has already been sold") {
+        return res.status(409).json({ error: message });
+      }
+      if (message === "You cannot buy your own product") {
+        return res.status(400).json({ error: message });
+      }
+      res.status(500).json({ error: "Payment verification failed", details: message });
     }
   };
 

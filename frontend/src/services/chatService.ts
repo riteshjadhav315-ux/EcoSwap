@@ -1,18 +1,10 @@
 import { io } from "socket.io-client";
 import { Product } from "../types";
+import { apiFetch, SOCKET_URL } from "./api";
 
-// 🔥 Backend URL (same as your working one)
-const BASE_URL = "https://ecoswap-backend-ows2.onrender.com";
-
-// 🔥 API URL
-const API_URL = `${BASE_URL}/api`;
-
-// ✅ Socket connection (with auth support)
-export const socket = io(BASE_URL, {
+export const socket = io(SOCKET_URL, {
   transports: ["websocket"],
 });
-
-// ================= TYPES =================
 
 export interface Chat {
   id: string;
@@ -37,22 +29,13 @@ export interface Message {
   createdAt: string;
 }
 
-// ================= API FUNCTIONS =================
-
-// ✅ Start chat
 export const startChat = async (
   product: Product,
   buyerId: string,
   buyerName: string
 ) => {
-  const token = localStorage.getItem("token");
-
-  const response = await fetch(`${API_URL}/chats`, {
+  const data = await apiFetch<{ _id: string }>("/api/chats", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token && { Authorization: `Bearer ${token}` }),
-    },
     body: JSON.stringify({
       productId: product.id,
       productTitle: product.title,
@@ -64,13 +47,9 @@ export const startChat = async (
     }),
   });
 
-  if (!response.ok) throw new Error("Failed to start chat");
-
-  const data = await response.json();
   return data._id;
 };
 
-// ✅ Send message (via socket)
 export const sendMessage = (
   chatId: string,
   senderId: string,
@@ -85,61 +64,33 @@ export const sendMessage = (
   });
 };
 
-// ✅ Get all chats of user
 export const getMyChats = async (userId: string) => {
-  const token = localStorage.getItem("token");
+  const data = await apiFetch<any[]>(`/api/chats?userId=${encodeURIComponent(userId)}`);
 
-  const response = await fetch(`${API_URL}/chats?userId=${userId}`, {
-    headers: {
-      ...(token && { Authorization: `Bearer ${token}` }),
-    },
-  });
-
-  if (!response.ok) throw new Error("Failed to fetch chats");
-
-  const data = await response.json();
-
-  return data.map((c: any) => ({
-    ...c,
-    id: c._id,
+  return data.map((chat) => ({
+    ...chat,
+    id: chat._id,
   }));
 };
 
-// ✅ Get messages of chat
 export const getMessages = async (chatId: string) => {
-  const token = localStorage.getItem("token");
+  const data = await apiFetch<any[]>(`/api/chats/${chatId}/messages`);
 
-  const response = await fetch(`${API_URL}/chats/${chatId}/messages`, {
-    headers: {
-      ...(token && { Authorization: `Bearer ${token}` }),
-    },
-  });
-
-  if (!response.ok) throw new Error("Failed to fetch messages");
-
-  const data = await response.json();
-
-  return data.map((m: any) => ({
-    ...m,
-    id: m._id,
+  return data.map((message) => ({
+    ...message,
+    id: message._id,
   }));
 };
 
-// ================= SOCKET LISTENER =================
-
-// ✅ Listen to new messages (REAL-TIME)
 export const listenToMessages = (
   chatId: string,
   callback: (message: Message) => void
 ) => {
-  // Join chat room
   socket.emit("join_chat", chatId);
-
-  // Prevent duplicate listeners
   socket.off("new_message");
 
   socket.on("new_message", (message: any) => {
-    if (message.chatId === chatId) {
+    if (String(message.chatId) === chatId) {
       callback({
         ...message,
         id: message._id,
@@ -147,7 +98,6 @@ export const listenToMessages = (
     }
   });
 
-  // Cleanup
   return () => {
     socket.off("new_message");
   };

@@ -6,6 +6,7 @@ import { useAuth } from "../context/AuthContext";
 import { useSearch } from "../context/SearchContext";
 import { CATEGORIES } from "../constants";
 import { getMyNotifications, markAsRead, Notification } from "../services/notificationService";
+import { apiFetch } from "../services/api";
 import { formatDistanceToNow } from "date-fns";
 
 export default function Navbar() {
@@ -94,8 +95,7 @@ export default function Navbar() {
   useEffect(() => {
     const checkHealth = async () => {
       try {
-        const res = await fetch("/api/health");
-        const data = await res.json();
+        const data = await apiFetch<any>("/api/health");
         if (data.database === "connected" && data.isAtlas) {
           setDbStatus('connected');
         } else {

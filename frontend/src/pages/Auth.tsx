@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Recycle, ArrowRight, AlertCircle, Loader2, User, Phone, MapPin } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useGoogleLogin } from "@react-oauth/google";
+import { apiFetch } from "../services/api";
 
 const GoogleLoginButton = ({ setLoading, setError, navigate, redirectPath, login, loading }: any) => {
   const handleGoogleSignIn = useGoogleLogin({
@@ -12,16 +13,10 @@ const GoogleLoginButton = ({ setLoading, setError, navigate, redirectPath, login
       setLoading(true);
       setError("");
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/google`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ code: codeResponse.code }),
-          });
-
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Google login failed");
-
+        const data = await apiFetch<{ token: string; user: any }>("/api/auth/google", {
+          method: "POST",
+          body: JSON.stringify({ code: codeResponse.code }),
+        });
         login(data.token, data.user);
         navigate(redirectPath);
       } catch (err: any) {
@@ -70,9 +65,7 @@ export default function Auth() {
   setLoading(true);
 
   try {
-    const endpoint = isLogin
-      ? `${import.meta.env.VITE_API_URL}/api/auth/login`
-      : `${import.meta.env.VITE_API_URL}/api/auth/register`;
+    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
 
     const body = isLogin
       ? { email, password }
@@ -84,17 +77,10 @@ export default function Auth() {
           location,
         };
 
-    const response = await fetch(endpoint, {
+    const data = await apiFetch<{ token: string; user: any }>(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || "Authentication failed");
-    }
 
     login(data.token, data.user);
     navigate(redirectPath);
