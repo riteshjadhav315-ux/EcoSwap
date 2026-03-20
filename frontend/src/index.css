@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Your custom styles */
-
 body {
   margin: 0;
   font-family: Arial, sans-serif;
@@ -12,14 +10,5 @@ body {
 }
 
 button {
-  padding: 10px 16px;
-  border: none;
-  background-color: #2563eb;
-  color: white;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-button:hover {
-  background-color: #1d4ed8;
+  font: inherit;
 }

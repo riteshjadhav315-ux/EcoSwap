@@ -589,9 +589,12 @@ export default function ProductDetails() {
                             description
                           })
                         });
-                        alert("Report submitted successfully.");
+                        setToastMessage("Report submitted successfully.");
+                        setShowToast(true);
+                        setTimeout(() => setShowToast(false), 3000);
                       } catch (err) {
                         console.error("Error reporting product:", err);
+                        setError("Failed to submit report.");
                       }
                     }}
                     className="w-full py-3 text-red-500 font-bold hover:bg-red-50 rounded-xl transition-all flex items-center justify-center gap-2"

@@ -34,6 +34,8 @@ export default function Navbar() {
       if (user?.uid) {
         const data = await getMyNotifications(user.uid);
         setNotifications(data);
+      } else {
+        setNotifications([]);
       }
     };
 
@@ -71,16 +73,61 @@ export default function Navbar() {
   }, []);
 
   const locations = ["All Locations", "Mumbai", "Delhi", "Pune", "Bangalore", "Hyderabad", "Chennai", "Kolkata"];
+
+  const openNotifications = () => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    setIsNotificationsOpen(true);
+  };
+
+  const toggleNotifications = () => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    setIsNotificationsOpen((prev) => !prev);
+  };
+
+  const goToChats = () => {
+    if (!user) {
+      navigate("/auth");
+      return;
+    }
+
+    navigate("/chats");
+  };
   
   const profileMenuItems = [
     { label: "My Profile", icon: User, href: "/profile", color: "text-emerald-600" },
     { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", color: "text-emerald-600" },
     ...(user?.role === 'admin' ? [{ label: "Admin Panel", icon: ShieldCheck, href: "/admin", color: "text-purple-600" }] : []),
-    { label: "Notifications", icon: Bell, onClick: () => setIsNotificationsOpen(true), color: "text-blue-600", badge: unreadCount },
-    { label: "Chats", icon: MessageCircle, href: "/chats", color: "text-emerald-600" },
+    { label: "Notifications", icon: Bell, onClick: () => {
+      if (!user) navigate("/auth");
+      else setIsNotificationsOpen(true);
+    }, color: "text-blue-600", badge: unreadCount },
+    { label: "Chats", icon: MessageCircle, onClick: () => {
+      if (!user) navigate("/auth");
+      else navigate("/chats");
+    }, color: "text-emerald-600" },
     { label: "Help", icon: HelpCircle, href: "/help", color: "text-amber-600" },
     { label: "Select language", icon: Languages, onClick: () => setIsLanguageOpen(true), color: "text-indigo-600" },
   ];
+
+  const accountMenuItems = [
+    { label: "My Profile", icon: User, href: "/profile", color: "text-emerald-600" },
+    { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", color: "text-emerald-600" },
+    ...(user?.role === "admin" ? [{ label: "Admin Panel", icon: ShieldCheck, href: "/admin", color: "text-purple-600" }] : []),
+    { label: "Notifications", icon: Bell, onClick: openNotifications, color: "text-blue-600", badge: unreadCount },
+    { label: "Chats", icon: MessageCircle, onClick: goToChats, color: "text-emerald-600" },
+    { label: "Help", icon: HelpCircle, href: "/help", color: "text-amber-600" },
+    { label: "Select language", icon: Languages, onClick: () => setIsLanguageOpen(true), color: "text-indigo-600" },
+  ];
+
+  void profileMenuItems;
 
   const languages = [
     { name: "English", code: "en" },
@@ -321,7 +368,7 @@ export default function Navbar() {
             {/* Notification Bell */}
             <div className="relative hidden sm:block" ref={notificationsRef}>
               <button 
-                onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                onClick={toggleNotifications}
                 className="relative p-2 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors group"
               >
                 <Bell className="w-6 h-6 group-hover:rotate-12 transition-transform" />
@@ -391,7 +438,7 @@ export default function Navbar() {
                             <div className="bg-emerald-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
                               <Bell className="w-6 h-6 text-emerald-200" />
                             </div>
-                            <p className="text-sm text-emerald-800/40 font-medium">No notifications yet</p>
+                            <p className="text-sm text-emerald-800/40 font-medium">No notifications</p>
                           </div>
                         )}
                       </div>
@@ -402,13 +449,19 @@ export default function Navbar() {
             </div>
 
             {/* Chat Icon */}
-            <Link 
-              to="/chats"
+            <button 
+              onClick={(e) => {
+                if (!user) {
+                  navigate("/auth");
+                } else {
+                  navigate("/chats");
+                }
+              }}
               className="hidden sm:flex p-2 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors group relative"
               title="Messages"
             >
               <MessageCircle className="w-6 h-6 group-hover:scale-110 transition-transform" />
-            </Link>
+            </button>
 
             {/* Profile Dropdown */}
             <div className="relative hidden md:block" ref={dropdownRef}>
@@ -461,7 +514,7 @@ export default function Navbar() {
                     
                     {/* Menu Items */}
                     <div className="px-2">
-                      {profileMenuItems.map((item, index) => (
+                      {accountMenuItems.map((item, index) => (
                         item.href ? (
                           <Link
                             key={index}
@@ -780,20 +833,32 @@ export default function Navbar() {
                   <div className="space-y-4">
                     <label className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">Quick Actions</label>
                     <div className="grid grid-cols-2 gap-3">
-                      <Link 
-                        to="/chats" 
-                        onClick={() => setIsMenuOpen(false)}
+                      <button 
+                        onClick={() => {
+                          if (!user) {
+                            setIsMenuOpen(false);
+                            navigate("/auth");
+                          } else {
+                            setIsMenuOpen(false);
+                            navigate("/chats");
+                          }
+                        }}
                         className="flex flex-col items-center gap-2 p-4 bg-white border border-emerald-100 rounded-2xl hover:bg-emerald-50 transition-all group"
                       >
                         <div className="p-2 bg-emerald-50 rounded-xl group-hover:scale-110 transition-transform">
                           <MessageCircle className="w-6 h-6 text-emerald-600" />
                         </div>
                         <span className="text-xs font-bold text-emerald-900">Messages</span>
-                      </Link>
+                      </button>
                       <button 
                         onClick={() => {
-                          setIsMenuOpen(false);
-                          setIsNotificationsOpen(true);
+                          if (!user) {
+                            setIsMenuOpen(false);
+                            navigate("/auth");
+                          } else {
+                            setIsMenuOpen(false);
+                            setIsNotificationsOpen(true);
+                          }
                         }}
                         className="flex flex-col items-center gap-2 p-4 bg-white border border-emerald-100 rounded-2xl hover:bg-emerald-50 transition-all group"
                       >
@@ -814,7 +879,7 @@ export default function Navbar() {
                   <div className="space-y-4">
                     <label className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">Account & Settings</label>
                     <div className="space-y-2">
-                      {profileMenuItems.map((item, index) => (
+                      {accountMenuItems.map((item, index) => (
                         item.href ? (
                           <Link
                             key={index}
