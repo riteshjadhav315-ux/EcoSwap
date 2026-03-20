@@ -7,26 +7,106 @@ import { getMyChats } from "../services/chatService";
 import { getWishlist, removeFromWishlist } from "../services/wishlistService";
 import { Product } from "../types";
 import { motion, AnimatePresence } from "framer-motion";
-import { User, Mail, Phone, MapPin, Calendar, Edit2, Save, X, Loader2, Camera, Package, Heart, Settings, Trash2, ExternalLink, ArrowRight, Recycle, MessageCircle } from "lucide-react";
-import { Link } from "react-router-dom";
+import { User, Mail, Phone, MapPin, Calendar, Edit2, Save, X, Loader2, Camera, Package, Heart, Settings, Trash2, ExternalLink, ArrowRight, Recycle, MessageCircle, ShoppingCart, Minus, Plus, CreditCard } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { useCart } from "../context/CartContext";
+import { createCartOrder, verifyPayment } from "../services/paymentService";
 
 export default function Profile() {
   const { user } = useAuth();
+  const { cartItems, removeFromCart, updateQuantity, clearCart, total, loading: cartLoading, fetchCart } = useCart();
   const location = useLocation();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [userProducts, setUserProducts] = useState<Product[]>([]);
-  const [activeTab, setActiveTab] = useState<"profile" | "listings" | "wishlist">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "listings" | "wishlist" | "cart">("profile");
   const [isEditing, setIsEditing] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [wishlistItems, setWishlistItems] = useState<any[]>([]);
   const [wishlistLoading, setWishlistLoading] = useState(false);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleCartCheckout = async () => {
+    if (!user || cartItems.length === 0) return;
+    
+    setCheckoutLoading(true);
+    try {
+      // 1. Create cart order
+      const order = await createCartOrder();
+      
+      // 2. Handle payment (Razorpay)
+      const options = {
+        key: (import.meta as any).env?.VITE_RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
+        amount: order.amount,
+        currency: order.currency,
+        name: "EcoSwap Marketplace",
+        description: `Cart Purchase (${cartItems.length} items)`,
+        order_id: order.id,
+        handler: async (response: any) => {
+          try {
+            const productIds = cartItems.map(item => item.productId);
+            await verifyPayment({
+              ...response,
+              productIds
+            });
+            alert("Payment successful! Your eco-friendly items are on their way.");
+            await clearCart();
+            setActiveTab("profile");
+            navigate("/profile?tab=profile");
+          } catch (error) {
+            console.error("Payment verification failed:", error);
+            alert("Payment verification failed. Please contact support.");
+          }
+        },
+        prefill: {
+          name: profile?.name || user.name || "",
+          email: user.email || "",
+          contact: profile?.phone || ""
+        },
+        theme: {
+          color: "#059669"
+        }
+      };
+
+      // Check if we are in a preview environment or if Razorpay is not available
+      const isPreview = window.location.hostname.includes('run.app') || window.location.hostname.includes('localhost');
+      
+      if (isPreview) {
+        // Simulate payment in preview
+        if (window.confirm("Simulate successful payment for this cart?")) {
+          const productIds = cartItems.map(item => item.productId);
+          await verifyPayment({
+            razorpay_order_id: order.id,
+            razorpay_payment_id: `sim_pay_${Date.now()}`,
+            razorpay_signature: "simulated",
+            productIds,
+            simulation: true
+          });
+          alert("Simulated payment successful!");
+          await clearCart();
+          setActiveTab("profile");
+          navigate("/profile?tab=profile");
+          return;
+        }
+      }
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    } catch (error) {
+      console.error("Checkout failed:", error);
+      alert("Failed to initiate checkout. Please try again.");
+    } finally {
+      setCheckoutLoading(false);
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get("tab");
     if (tab === "ads" || tab === "listings") setActiveTab("listings");
     else if (tab === "wishlist") setActiveTab("wishlist");
+    else if (tab === "cart") setActiveTab("cart");
     else setActiveTab("profile");
   }, [location.search]);
 
@@ -266,15 +346,20 @@ export default function Profile() {
             <div className="bg-white rounded-[2rem] p-8 shadow-xl shadow-emerald-100/50 border border-emerald-50">
               <h3 className="text-lg font-black text-emerald-950 mb-6">Quick Stats</h3>
               <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 bg-emerald-50 rounded-2xl">
+                <div className="p-4 bg-emerald-50 rounded-2xl cursor-pointer hover:bg-emerald-100 transition-colors" onClick={() => setActiveTab("listings")}>
                   <Package className="w-6 h-6 text-emerald-600 mb-2" />
                   <div className="text-2xl font-black text-emerald-950">{userProducts.length}</div>
                   <div className="text-xs font-bold text-emerald-600 uppercase tracking-wider">My Ads</div>
                 </div>
-                <div className="p-4 bg-orange-50 rounded-2xl">
+                <div className="p-4 bg-orange-50 rounded-2xl cursor-pointer hover:bg-orange-100 transition-colors" onClick={() => setActiveTab("wishlist")}>
                   <Heart className="w-6 h-6 text-orange-500 mb-2" />
-                  <div className="text-2xl font-black text-emerald-950">48</div>
-                  <div className="text-xs font-bold text-orange-600 uppercase tracking-wider">Likes</div>
+                  <div className="text-2xl font-black text-emerald-950">{wishlistItems.length}</div>
+                  <div className="text-xs font-bold text-orange-600 uppercase tracking-wider">Wishlist</div>
+                </div>
+                <div className="p-4 bg-blue-50 rounded-2xl cursor-pointer hover:bg-blue-100 transition-colors" onClick={() => setActiveTab("cart")}>
+                  <ShoppingCart className="w-6 h-6 text-blue-500 mb-2" />
+                  <div className="text-2xl font-black text-emerald-950">{cartItems.length}</div>
+                  <div className="text-xs font-bold text-blue-600 uppercase tracking-wider">My Cart</div>
                 </div>
               </div>
             </div>
@@ -311,6 +396,16 @@ export default function Profile() {
                     <span className="font-bold">Wishlist</span>
                   </div>
                   <ArrowRight className={`w-4 h-4 ${activeTab === 'wishlist' ? 'text-white/50' : 'text-emerald-300'}`} />
+                </button>
+                <button 
+                  onClick={() => setActiveTab("cart")}
+                  className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all group ${activeTab === 'cart' ? 'bg-emerald-600 text-white' : 'hover:bg-emerald-50 text-emerald-900'}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <ShoppingCart className={`w-5 h-5 ${activeTab === 'cart' ? 'text-white' : 'text-emerald-400 group-hover:text-emerald-600'}`} />
+                    <span className="font-bold">My Cart</span>
+                  </div>
+                  <ArrowRight className={`w-4 h-4 ${activeTab === 'cart' ? 'text-white/50' : 'text-emerald-300'}`} />
                 </button>
               </div>
             </div>
@@ -519,6 +614,112 @@ export default function Profile() {
                             </div>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === "cart" && (
+                <motion.div
+                  key="cart-tab"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-white rounded-[2rem] p-8 shadow-xl shadow-emerald-100/50 border border-emerald-50">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-xl font-black text-emerald-950">My Shopping Cart</h3>
+                      {cartItems.length > 0 && (
+                        <button 
+                          onClick={() => {
+                            if (window.confirm("Are you sure you want to clear your cart?")) {
+                              clearCart();
+                            }
+                          }}
+                          className="text-xs font-bold text-red-500 hover:text-red-600 flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Clear Cart
+                        </button>
+                      )}
+                    </div>
+
+                    {cartLoading ? (
+                      <div className="flex justify-center py-12">
+                        <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+                      </div>
+                    ) : cartItems.length === 0 ? (
+                      <div className="text-center py-12">
+                        <ShoppingCart className="w-12 h-12 text-emerald-200 mx-auto mb-4" />
+                        <p className="text-emerald-600 font-medium">Your cart is empty.</p>
+                        <Link to="/" className="mt-4 inline-block text-emerald-600 font-bold hover:underline">Start Shopping</Link>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4">
+                          {cartItems.map(item => (
+                            <div key={item._id} className="flex items-center gap-4 p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 group">
+                              <img src={item.productImageUrl} alt={item.productTitle} className="w-20 h-20 object-cover rounded-xl" referrerPolicy="no-referrer" />
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-emerald-950 truncate">{item.productTitle}</h4>
+                                <p className="text-emerald-600 font-black">₹{item.productPrice}</p>
+                              </div>
+                              
+                              <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-xl border border-emerald-100 shadow-sm">
+                                <button 
+                                  onClick={() => updateQuantity(item._id, item.quantity - 1)}
+                                  disabled={item.quantity <= 1}
+                                  className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg disabled:opacity-30"
+                                >
+                                  <Minus className="w-3 h-3" />
+                                </button>
+                                <span className="text-sm font-black text-emerald-950 min-w-[20px] text-center">{item.quantity}</span>
+                                <button 
+                                  onClick={() => updateQuantity(item._id, item.quantity + 1)}
+                                  disabled={item.quantity >= 1}
+                                  className="p-1 text-emerald-600 hover:bg-emerald-50 rounded-lg"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                </button>
+                              </div>
+
+                              <div className="flex gap-2">
+                                <Link to={`/product/${item.productId}`} className="p-2 bg-white text-emerald-600 rounded-lg shadow-sm hover:bg-emerald-600 hover:text-white transition-all">
+                                  <ExternalLink className="w-4 h-4" />
+                                </Link>
+                                <button 
+                                  onClick={() => removeFromCart(item._id)}
+                                  className="p-2 bg-white text-red-500 rounded-lg shadow-sm hover:bg-red-500 hover:text-white transition-all"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="mt-8 pt-6 border-t border-emerald-100">
+                          <div className="flex items-center justify-between mb-6">
+                            <span className="text-emerald-600 font-bold">Total Amount</span>
+                            <span className="text-2xl font-black text-emerald-950">₹{total}</span>
+                          </div>
+                          <button 
+                            onClick={handleCartCheckout}
+                            disabled={checkoutLoading}
+                            className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 group disabled:opacity-50"
+                          >
+                            {checkoutLoading ? (
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                            ) : (
+                              <>
+                                Proceed to Checkout
+                                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                              </>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>

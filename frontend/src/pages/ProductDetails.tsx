@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import React, { useState, useEffect } from "react";
-import { MapPin, ShieldCheck, MessageCircle, Share2, Flag, ArrowLeft, Clock, ShoppingBag, ShoppingCart, Loader2, Mail, Phone, Lock, Heart, Star, ChevronLeft, ChevronRight } from "lucide-react";
+import { MapPin, ShieldCheck, MessageCircle, Share2, Flag, ArrowLeft, Clock, ShoppingBag, ShoppingCart, Loader2, Mail, Phone, Lock, Heart, Star, ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -29,6 +29,8 @@ export default function ProductDetails() {
   const [sellerRating, setSellerRating] = useState({ averageRating: 0, reviewCount: 0 });
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   const images = product?.images && product.images.length > 0 
     ? product.images 
@@ -308,20 +310,20 @@ export default function ProductDetails() {
         )}
       </AnimatePresence>
 
-      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <Link to="/" className="inline-flex items-center gap-2 text-emerald-600 font-bold mb-8 hover:gap-3 transition-all group">
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-8">
+        <Link to="/" className="inline-flex items-center gap-2 text-emerald-600 font-bold mb-6 lg:mb-8 hover:gap-3 transition-all group text-sm lg:text-base">
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
           Back to listings
         </Link>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12">
           {/* Image Gallery */}
           <div className="lg:col-span-7">
             <div className="space-y-4">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl shadow-emerald-100 border border-white relative group"
+                className="bg-white rounded-[1.5rem] lg:rounded-[2.5rem] overflow-hidden shadow-2xl shadow-emerald-100 border border-white relative group"
               >
                 {product.status === 'sold' && (
                   <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] flex items-center justify-center z-10">
@@ -395,42 +397,42 @@ export default function ProductDetails() {
               )}
             </div>
             
-            <div className="mt-8 bg-white rounded-[2rem] p-8 border border-emerald-50 shadow-sm">
-              <h2 className="text-2xl font-bold text-emerald-950 mb-6 flex items-center gap-2">
-                <ShoppingBag className="w-6 h-6 text-emerald-600" />
+            <div className="mt-6 lg:mt-8 bg-white rounded-[1.5rem] lg:rounded-[2rem] p-6 lg:p-8 border border-emerald-50 shadow-sm">
+              <h2 className="text-xl lg:text-2xl font-bold text-emerald-950 mb-4 lg:mb-6 flex items-center gap-2">
+                <ShoppingBag className="w-5 h-5 lg:w-6 lg:h-6 text-emerald-600" />
                 Description
               </h2>
-              <p className="text-emerald-800/70 leading-relaxed whitespace-pre-wrap text-lg">
+              <p className="text-emerald-800/70 leading-relaxed whitespace-pre-wrap text-base lg:text-lg">
                 {product.description || "No description available"}
               </p>
               
-              <div className="mt-10 grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100/50">
-                  <p className="text-[10px] uppercase tracking-widest text-emerald-500 font-bold mb-2">Condition</p>
-                  <p className="font-bold text-emerald-900">{product.condition}</p>
+              <div className="mt-8 lg:mt-10 grid grid-cols-2 sm:grid-cols-4 gap-3 lg:gap-4">
+                <div className="p-4 lg:p-5 bg-emerald-50/50 rounded-xl lg:rounded-2xl border border-emerald-100/50">
+                  <p className="text-[9px] lg:text-[10px] uppercase tracking-widest text-emerald-500 font-bold mb-1 lg:mb-2">Condition</p>
+                  <p className="font-bold text-emerald-900 text-sm lg:text-base">{product.condition}</p>
                 </div>
-                <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100/50">
-                  <p className="text-[10px] uppercase tracking-widest text-emerald-500 font-bold mb-2">Category</p>
-                  <p className="font-bold text-emerald-900 capitalize">{product.category.replace('-', ' ')}</p>
+                <div className="p-4 lg:p-5 bg-emerald-50/50 rounded-xl lg:rounded-2xl border border-emerald-100/50">
+                  <p className="text-[9px] lg:text-[10px] uppercase tracking-widest text-emerald-500 font-bold mb-1 lg:mb-2">Category</p>
+                  <p className="font-bold text-emerald-900 text-sm lg:text-base capitalize">{product.category.replace('-', ' ')}</p>
                 </div>
-                <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100/50">
-                  <p className="text-[10px] uppercase tracking-widest text-emerald-500 font-bold mb-2">Listed</p>
-                  <div className="flex items-center gap-1 font-bold text-emerald-900">
+                <div className="p-4 lg:p-5 bg-emerald-50/50 rounded-xl lg:rounded-2xl border border-emerald-100/50">
+                  <p className="text-[9px] lg:text-[10px] uppercase tracking-widest text-emerald-500 font-bold mb-1 lg:mb-2">Listed</p>
+                  <div className="flex items-center gap-1 font-bold text-emerald-900 text-sm lg:text-base">
                     <Clock className="w-3 h-3" />
                     <span>{new Date(product.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
                   </div>
                 </div>
-                <div className="p-5 bg-emerald-50/50 rounded-2xl border border-emerald-100/50">
-                  <p className="text-[10px] uppercase tracking-widest text-emerald-500 font-bold mb-2">Status</p>
-                  <p className="font-bold text-emerald-900 capitalize">{product.status}</p>
+                <div className="p-4 lg:p-5 bg-emerald-50/50 rounded-xl lg:rounded-2xl border border-emerald-100/50">
+                  <p className="text-[9px] lg:text-[10px] uppercase tracking-widest text-emerald-500 font-bold mb-1 lg:mb-2">Status</p>
+                  <p className="font-bold text-emerald-900 text-sm lg:text-base capitalize">{product.status}</p>
                 </div>
               </div>
             </div>
 
-            <div className="mt-8 bg-white rounded-[2rem] p-8 border border-emerald-50 shadow-sm">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-emerald-950 flex items-center gap-2">
-                  <Star className="w-6 h-6 text-emerald-600" />
+            <div className="mt-6 lg:mt-8 bg-white rounded-[1.5rem] lg:rounded-[2rem] p-6 lg:p-8 border border-emerald-50 shadow-sm">
+              <div className="flex justify-between items-center mb-4 lg:mb-6">
+                <h2 className="text-xl lg:text-2xl font-bold text-emerald-950 flex items-center gap-2">
+                  <Star className="w-5 h-5 lg:w-6 lg:h-6 text-emerald-600" />
                   Reviews ({reviews.length})
                 </h2>
                 {user && user.uid !== product.sellerId && !showReviewForm && (
@@ -469,62 +471,77 @@ export default function ProductDetails() {
           </div>
 
           {/* Sidebar */}
-          <div className="lg:col-span-5 space-y-8">
+          <div className="lg:col-span-5 space-y-6 lg:space-y-8">
             {/* Price & Title Card */}
-            <div className="bg-white rounded-[2.5rem] p-10 border border-emerald-50 shadow-2xl shadow-emerald-100/50 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full -mr-16 -mt-16 opacity-50" />
+            <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-10 border border-emerald-50 shadow-2xl shadow-emerald-100/50 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 lg:w-32 h-24 lg:h-32 bg-emerald-50 rounded-full -mr-12 lg:-mr-16 -mt-12 lg:-mt-16 opacity-50" />
               
               <div className="relative">
-                <div className="flex justify-between items-start mb-6">
-                  <h1 className="text-4xl font-black text-emerald-950 tracking-tight leading-tight">{product.title}</h1>
+                <div className="flex justify-between items-start mb-4 lg:mb-6">
+                  <h1 className="text-2xl lg:text-4xl font-black text-emerald-950 tracking-tight leading-tight">{product.title}</h1>
                   <div className="flex gap-2">
                     <button 
                       onClick={handleWishlist}
-                      className={`p-3 rounded-xl transition-all ${wishlistId ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
+                      className={`p-2.5 lg:p-3 rounded-xl transition-all ${wishlistId ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'}`}
                     >
-                      <Heart className={`w-5 h-5 ${wishlistId ? 'fill-current' : ''}`} />
+                      <Heart className={`w-4 h-4 lg:w-5 lg:h-5 ${wishlistId ? 'fill-current' : ''}`} />
                     </button>
-                    <button className="p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all">
-                      <Share2 className="w-5 h-5" />
+                    <button className="p-2.5 lg:p-3 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all">
+                      <Share2 className="w-4 h-4 lg:w-5 lg:h-5" />
                     </button>
                   </div>
                 </div>
                 
-                <div className="flex items-baseline gap-2 mb-8">
-                  <span className="text-5xl font-black text-emerald-600">₹{product.price}</span>
-                  <span className="text-emerald-400 font-medium">INR</span>
+                <div className="flex items-baseline gap-2 mb-6 lg:mb-8">
+                  <span className="text-4xl lg:text-5xl font-black text-emerald-600">₹{product.price}</span>
+                  <span className="text-emerald-400 font-medium text-sm lg:text-base">INR</span>
                 </div>
                 
-                <div className="flex items-center gap-3 text-emerald-600 mb-10 bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100/50">
-                  <MapPin className="w-5 h-5" />
-                  <span className="font-bold">{product.location}</span>
+                <div className="flex items-center gap-3 text-emerald-600 mb-8 lg:mb-10 bg-emerald-50/50 p-3.5 lg:p-4 rounded-2xl border border-emerald-100/50">
+                  <MapPin className="w-4 h-4 lg:w-5 lg:h-5" />
+                  <span className="font-bold text-sm lg:text-base">{product.location}</span>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-3 lg:space-y-4">
                   {error && (
-                    <div className="p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-sm font-medium flex items-center gap-2">
+                    <div className="p-3.5 lg:p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs lg:text-sm font-medium flex items-center gap-2">
                       <Flag className="w-4 h-4" />
                       {error}
                     </div>
                   )}
 
                   {paymentSuccess && (
-                    <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600 text-sm font-bold flex items-center gap-2 animate-bounce">
-                      <ShieldCheck className="w-5 h-5" />
+                    <div className="p-3.5 lg:p-4 bg-emerald-50 border border-emerald-100 rounded-2xl text-emerald-600 text-xs lg:text-sm font-bold flex items-center gap-2 animate-bounce">
+                      <ShieldCheck className="w-4 h-4 lg:w-5 lg:h-5" />
                       Payment Successful! Redirecting...
                     </div>
                   )}
 
                   <button 
-                    onClick={() => addToCart(product)}
+                    onClick={async () => {
+                      if (!user) {
+                        navigate("/auth");
+                        return;
+                      }
+
+                      try {
+                        await addToCart(product);
+                        setToastMessage(`${product.title} added to cart!`);
+                        setShowToast(true);
+                        setTimeout(() => setShowToast(false), 3000);
+                      } catch (cartError) {
+                        console.error("Failed to add to cart:", cartError);
+                        setError("Failed to add item to cart.");
+                      }
+                    }}
                     disabled={product.status === 'sold'}
-                    className={`w-full py-5 rounded-2xl font-bold transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95 ${
+                    className={`w-full py-4 lg:py-5 rounded-2xl font-bold transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95 ${
                       product.status === 'sold' 
                         ? 'bg-stone-200 text-stone-500 cursor-not-allowed shadow-none' 
                         : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-200'
                     }`}
                   >
-                    <ShoppingCart className="w-6 h-6" />
+                    <ShoppingCart className="w-5 h-5 lg:w-6 lg:h-6" />
                     {product.status === 'sold' ? 'Sold Out' : 'Add to Cart'}
                   </button>
 
@@ -532,12 +549,12 @@ export default function ProductDetails() {
                     <button 
                       onClick={handleBuyNow}
                       disabled={paymentLoading}
-                      className="w-full py-5 bg-emerald-950 text-white rounded-2xl font-bold hover:bg-black transition-all shadow-xl shadow-emerald-900/20 flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
+                      className="w-full py-4 lg:py-5 bg-emerald-950 text-white rounded-2xl font-bold hover:bg-black transition-all shadow-xl shadow-emerald-900/20 flex items-center justify-center gap-3 active:scale-95 disabled:opacity-70"
                     >
                       {paymentLoading ? (
-                        <Loader2 className="w-6 h-6 animate-spin" />
+                        <Loader2 className="w-5 h-5 lg:w-6 lg:h-6 animate-spin" />
                       ) : (
-                        <ShoppingBag className="w-6 h-6" />
+                        <ShoppingBag className="w-5 h-5 lg:w-6 lg:h-6" />
                       )}
                       Buy Now
                     </button>
@@ -545,9 +562,9 @@ export default function ProductDetails() {
                   
                   <button
                     onClick={handleContactSeller}
-                    className="w-full py-5 bg-emerald-50 text-emerald-700 rounded-2xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-3 border border-emerald-100"
+                    className="w-full py-4 lg:py-5 bg-emerald-50 text-emerald-700 rounded-2xl font-bold hover:bg-emerald-100 transition-all flex items-center justify-center gap-3 border border-emerald-100"
                   >
-                    <MessageCircle className="w-6 h-6" />
+                    <MessageCircle className="w-5 h-5 lg:w-6 lg:h-6" />
                     Chat with Seller
                   </button>
 
@@ -594,29 +611,29 @@ export default function ProductDetails() {
             </div>
 
             {/* Seller Card */}
-            <div className="bg-white rounded-[2.5rem] p-10 border border-emerald-50 shadow-2xl shadow-emerald-100/50">
-              <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-8">Seller Profile</h3>
-              <div className="flex items-center gap-5 mb-8">
-                <div className="w-16 h-16 rounded-2xl bg-emerald-100 flex items-center justify-center text-2xl font-black text-emerald-700 shadow-inner">
+            <div className="bg-white rounded-[2rem] lg:rounded-[2.5rem] p-6 lg:p-10 border border-emerald-50 shadow-2xl shadow-emerald-100/50">
+              <h3 className="text-[10px] lg:text-xs font-bold text-emerald-400 uppercase tracking-widest mb-6 lg:mb-8">Seller Profile</h3>
+              <div className="flex items-center gap-4 lg:gap-5 mb-6 lg:mb-8">
+                <div className="w-12 h-12 lg:w-16 lg:h-16 rounded-xl lg:rounded-2xl bg-emerald-100 flex items-center justify-center text-xl lg:text-2xl font-black text-emerald-700 shadow-inner">
                   {product.sellerName.charAt(0)}
                 </div>
                 <div>
-                  <h4 className="text-xl font-bold text-emerald-950">{product.sellerName}</h4>
+                  <h4 className="text-lg lg:text-xl font-bold text-emerald-950">{product.sellerName}</h4>
                   <div className="flex items-center gap-2">
-                    <StarRating rating={sellerRating.averageRating} size={14} />
-                    <span className="text-xs font-bold text-emerald-600">
+                    <StarRating rating={sellerRating.averageRating} size={12} />
+                    <span className="text-[10px] lg:text-xs font-bold text-emerald-600">
                       {sellerRating.averageRating > 0 ? `${sellerRating.averageRating}/5 (${sellerRating.reviewCount})` : 'No reviews'}
                     </span>
                   </div>
                 </div>
               </div>
               
-              <div className="p-6 bg-emerald-50/50 rounded-3xl border border-emerald-100/50">
-                <div className="flex items-center gap-2 text-emerald-700 font-bold mb-2">
-                  <ShieldCheck className="w-5 h-5" />
+              <div className="p-4 lg:p-6 bg-emerald-50/50 rounded-2xl lg:rounded-3xl border border-emerald-100/50">
+                <div className="flex items-center gap-2 text-emerald-700 font-bold mb-2 text-sm lg:text-base">
+                  <ShieldCheck className="w-4 h-4 lg:w-5 lg:h-5" />
                   Verified Community Member
                 </div>
-                <p className="text-sm text-emerald-600/70 leading-relaxed">Identity verified. This seller consistently provides accurate descriptions and fast responses.</p>
+                <p className="text-xs lg:text-sm text-emerald-600/70 leading-relaxed">Identity verified. This seller consistently provides accurate descriptions and fast responses.</p>
               </div>
               
               <Link 
@@ -629,6 +646,23 @@ export default function ProductDetails() {
           </div>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {showToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 50, x: '-50%' }}
+            className="fixed bottom-8 left-1/2 z-[100] bg-emerald-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-800/50 backdrop-blur-md"
+          >
+            <div className="bg-emerald-500 p-1 rounded-full">
+              <Zap className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-bold tracking-tight">{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { Search, User, Menu, Recycle, MessageCircle, HelpCircle, Languages, ChevronDown, MapPin, LogIn, Sparkles, PlusCircle, Bell, X, Trash2, LogOut, LayoutDashboard, Filter, Check, ShieldCheck } from "lucide-react";
+import { Search, User, Menu, Recycle, MessageCircle, HelpCircle, Languages, ChevronDown, MapPin, LogIn, Sparkles, PlusCircle, Bell, X, Trash2, LogOut, LayoutDashboard, Filter, Check, ShieldCheck, ArrowRight, ShoppingCart } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "../context/AuthContext";
@@ -76,6 +76,7 @@ export default function Navbar() {
     { label: "My Profile", icon: User, href: "/profile", color: "text-emerald-600" },
     { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard", color: "text-emerald-600" },
     ...(user?.role === 'admin' ? [{ label: "Admin Panel", icon: ShieldCheck, href: "/admin", color: "text-purple-600" }] : []),
+    { label: "Notifications", icon: Bell, onClick: () => setIsNotificationsOpen(true), color: "text-blue-600", badge: unreadCount },
     { label: "Chats", icon: MessageCircle, href: "/chats", color: "text-emerald-600" },
     { label: "Help", icon: HelpCircle, href: "/help", color: "text-amber-600" },
     { label: "Select language", icon: Languages, onClick: () => setIsLanguageOpen(true), color: "text-indigo-600" },
@@ -142,7 +143,7 @@ export default function Navbar() {
           </div>
 
           {/* Middle Section: Location, Search */}
-          <div className="hidden md:flex flex-1 items-center gap-4 lg:gap-6 mr-auto ml-2 lg:ml-4 max-w-4xl">
+          <div className="hidden lg:flex flex-1 items-center gap-4 lg:gap-6 mr-auto ml-2 lg:ml-4 max-w-4xl">
             {/* Location Selector */}
             <div className="relative" ref={locationRef}>
               <button 
@@ -311,14 +312,14 @@ export default function Navbar() {
             {/* Sell Items Button (Desktop) */}
             <Link 
               to="/sell"
-              className="hidden lg:flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-full transition-all font-bold text-sm shadow-lg shadow-emerald-200 shrink-0 group"
+              className="hidden xl:flex items-center gap-2 px-6 py-2.5 bg-emerald-600 text-white hover:bg-emerald-700 rounded-full transition-all font-bold text-sm shadow-lg shadow-emerald-200 shrink-0 group"
             >
               <PlusCircle className="w-4 h-4 group-hover:rotate-90 transition-transform duration-300" />
               <span>Sell Items</span>
             </Link>
 
             {/* Notification Bell */}
-            <div className="relative" ref={notificationsRef}>
+            <div className="relative hidden sm:block" ref={notificationsRef}>
               <button 
                 onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
                 className="relative p-2 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors group"
@@ -331,55 +332,71 @@ export default function Navbar() {
 
               <AnimatePresence>
                 {isNotificationsOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                    className="absolute right-0 mt-2 w-80 bg-white rounded-3xl shadow-2xl border border-emerald-50 overflow-hidden z-[100] py-2"
-                  >
-                    <div className="px-4 py-3 border-b border-emerald-50 flex justify-between items-center">
-                      <p className="text-xs font-bold text-emerald-900 uppercase tracking-widest">Notifications</p>
-                      {unreadCount > 0 && (
-                        <span className="bg-emerald-100 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                          {unreadCount} New
-                        </span>
-                      )}
-                    </div>
-                    <div className="max-h-[400px] overflow-y-auto">
-                      {notifications.length > 0 ? (
-                        notifications.map((notif) => (
-                          <button
-                            key={notif.id}
-                            onClick={async () => {
-                              if (!notif.read && notif.id) await markAsRead(notif.id);
-                              if (notif.link) navigate(notif.link);
-                              setIsNotificationsOpen(false);
-                            }}
-                            className={`w-full text-left p-4 hover:bg-emerald-50 transition-colors border-b border-emerald-50/50 last:border-0 flex gap-3 ${!notif.read ? 'bg-emerald-50/30' : ''}`}
-                          >
-                            <div className={`p-2 rounded-xl shrink-0 ${notif.type === 'message' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
-                              {notif.type === 'message' ? <MessageCircle className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-bold text-emerald-900 truncate">{notif.title}</p>
-                              <p className="text-xs text-emerald-800/60 line-clamp-2 mt-0.5">{notif.message}</p>
-                              <p className="text-[10px] text-emerald-400 mt-1">
-                                {notif.createdAt ? formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true }) : 'Just now'}
-                              </p>
-                            </div>
-                            {!notif.read && <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2 shrink-0" />}
+                  <>
+                    {/* Mobile Overlay for Notifications */}
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      onClick={() => setIsNotificationsOpen(false)}
+                      className="fixed inset-0 bg-emerald-950/80 backdrop-blur-md z-[10000] sm:hidden"
+                    />
+                    
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      className="fixed inset-4 sm:absolute sm:inset-auto sm:right-0 sm:mt-2 w-auto sm:w-80 bg-white rounded-3xl shadow-2xl border border-emerald-50 overflow-hidden z-[10001] sm:z-[100] py-2 flex flex-col"
+                    >
+                      <div className="px-4 py-3 border-b border-emerald-50 flex justify-between items-center bg-emerald-50/30">
+                        <p className="text-xs font-bold text-emerald-900 uppercase tracking-widest">Notifications</p>
+                        <div className="flex items-center gap-2">
+                          {unreadCount > 0 && (
+                            <span className="bg-emerald-100 text-emerald-600 text-[10px] font-bold px-2 py-0.5 rounded-full">
+                              {unreadCount} New
+                            </span>
+                          )}
+                          <button onClick={() => setIsNotificationsOpen(false)} className="sm:hidden p-1 text-emerald-400">
+                            <X className="w-4 h-4" />
                           </button>
-                        ))
-                      ) : (
-                        <div className="p-8 text-center">
-                          <div className="bg-emerald-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-                            <Bell className="w-6 h-6 text-emerald-200" />
-                          </div>
-                          <p className="text-sm text-emerald-800/40 font-medium">No notifications yet</p>
                         </div>
-                      )}
-                    </div>
-                  </motion.div>
+                      </div>
+                      <div className="flex-1 overflow-y-auto max-h-[calc(100vh-120px)] sm:max-h-[400px]">
+                        {notifications.length > 0 ? (
+                          notifications.map((notif) => (
+                            <button
+                              key={notif.id}
+                              onClick={async () => {
+                                if (!notif.read && notif.id) await markAsRead(notif.id);
+                                if (notif.link) navigate(notif.link);
+                                setIsNotificationsOpen(false);
+                              }}
+                              className={`w-full text-left p-4 hover:bg-emerald-50 transition-colors border-b border-emerald-50/50 last:border-0 flex gap-3 ${!notif.read ? 'bg-emerald-50/30' : ''}`}
+                            >
+                              <div className={`p-2 rounded-xl shrink-0 ${notif.type === 'message' ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                                {notif.type === 'message' ? <MessageCircle className="w-4 h-4" /> : <Bell className="w-4 h-4" />}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-bold text-emerald-900 truncate">{notif.title}</p>
+                                <p className="text-xs text-emerald-800/60 line-clamp-2 mt-0.5">{notif.message}</p>
+                                <p className="text-[10px] text-emerald-400 mt-1">
+                                  {notif.createdAt ? formatDistanceToNow(new Date(notif.createdAt), { addSuffix: true }) : 'Just now'}
+                                </p>
+                              </div>
+                              {!notif.read && <div className="w-2 h-2 bg-emerald-500 rounded-full mt-2 shrink-0" />}
+                            </button>
+                          ))
+                        ) : (
+                          <div className="p-8 text-center">
+                            <div className="bg-emerald-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
+                              <Bell className="w-6 h-6 text-emerald-200" />
+                            </div>
+                            <p className="text-sm text-emerald-800/40 font-medium">No notifications yet</p>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  </>
                 )}
               </AnimatePresence>
             </div>
@@ -387,14 +404,14 @@ export default function Navbar() {
             {/* Chat Icon */}
             <Link 
               to="/chats"
-              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors group relative"
+              className="hidden sm:flex p-2 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors group relative"
               title="Messages"
             >
               <MessageCircle className="w-6 h-6 group-hover:scale-110 transition-transform" />
             </Link>
 
             {/* Profile Dropdown */}
-            <div className="relative hidden sm:block" ref={dropdownRef}>
+            <div className="relative hidden md:block" ref={dropdownRef}>
               <button 
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
                 className="flex items-center gap-1 p-1 pr-2 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors border border-transparent hover:border-emerald-100"
@@ -532,9 +549,10 @@ export default function Navbar() {
             
             <button 
               onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 text-emerald-600 hover:bg-emerald-50 rounded-full transition-colors"
+              className="md:hidden p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all active:scale-90 border border-emerald-100"
+              aria-label="Toggle Menu"
             >
-              <Menu className="w-6 h-6" />
+              {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
             </button>
           </div>
         </div>
@@ -544,178 +562,344 @@ export default function Navbar() {
       <AnimatePresence>
         {isMenuOpen && (
           <>
+            {/* Overlay */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60] md:hidden"
+              className="fixed inset-0 bg-emerald-950/90 backdrop-blur-md z-[9998] md:hidden"
             />
+            
+            {/* Drawer */}
             <motion.div
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              className="fixed top-0 right-0 bottom-0 w-[80%] max-w-sm bg-white z-[70] shadow-2xl md:hidden flex flex-col"
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed inset-0 bg-white z-[9999] md:hidden flex flex-col"
             >
-              <div className="p-6 border-b border-emerald-50 flex justify-between items-center">
-                <span className="text-xl font-bold text-emerald-900">Menu</span>
-                <button onClick={() => setIsMenuOpen(false)} className="p-2 text-emerald-400 hover:text-emerald-600">
-                  <X className="w-6 h-6" />
-                </button>
+              {/* Header */}
+              <div className="p-4 flex justify-between items-center border-b border-emerald-50 bg-white sticky top-0 z-10">
+                <Link to="/" onClick={() => setIsMenuOpen(false)} className="flex items-center gap-2">
+                  <div className="bg-emerald-600 p-1.5 rounded-lg">
+                    <Recycle className="w-5 h-5 text-white" />
+                  </div>
+                  <span className="text-lg font-black text-emerald-950 tracking-tighter">EcoSwap</span>
+                </Link>
+                <div className="flex items-center gap-3">
+                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                    dbStatus === 'connected' 
+                      ? 'bg-emerald-50 text-emerald-600 border-emerald-200' 
+                      : 'bg-amber-50 text-amber-600 border-amber-200'
+                  }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                      dbStatus === 'connected' ? 'bg-emerald-500' : 'bg-amber-500'
+                    }`} />
+                    {dbStatus === 'connected' ? 'Atlas' : 'Local'}
+                  </div>
+                  <button 
+                    onClick={() => setIsMenuOpen(false)} 
+                    className="p-2 bg-emerald-50 text-emerald-600 rounded-xl hover:bg-emerald-100 transition-all active:scale-90"
+                  >
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-8">
-                {/* Mobile Search */}
-                <form 
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setIsMenuOpen(false);
-                    if (window.location.pathname !== '/') {
-                      navigate('/');
-                      setTimeout(() => {
-                        document.getElementById('marketplace')?.scrollIntoView({ behavior: 'smooth' });
-                      }, 100);
-                    } else {
-                      document.getElementById('marketplace')?.scrollIntoView({ behavior: 'smooth' });
-                    }
-                  }}
-                  className="relative"
-                >
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <Search className="h-4 w-4 text-emerald-500" />
-                  </div>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="block w-full pl-10 pr-24 py-3 border border-emerald-100 rounded-2xl bg-emerald-50/50 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-                    placeholder="Search items..."
-                  />
-                  <div className="absolute inset-y-1.5 right-1.5 flex items-center gap-1">
-                    {searchQuery && (
+              <div className="flex-1 overflow-y-auto custom-scrollbar pb-24">
+                {/* User Section */}
+                <div className="p-6 bg-gradient-to-br from-emerald-50 to-white border-b border-emerald-50">
+                  {user ? (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 bg-emerald-600 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg shadow-emerald-100">
+                          {user.name?.[0] || user.email?.[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-base font-black text-emerald-950">{user.name || user.email?.split('@')[0]}</p>
+                          <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Eco Warrior • Level 1</p>
+                        </div>
+                      </div>
                       <button 
-                        type="button"
-                        onClick={() => setSearchQuery("")}
-                        className="p-1.5 text-emerald-400"
+                        onClick={handleLogout}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
+                        title="Logout"
                       >
-                        <X className="h-4 w-4" />
+                        <LogOut className="w-5 h-5" />
                       </button>
-                    )}
-                    <button 
-                      type="submit"
-                      className="bg-emerald-600 text-white px-4 py-1.5 rounded-xl text-xs font-bold"
-                    >
-                      Go
-                    </button>
-                  </div>
-                </form>
-
-                {/* Mobile Location */}
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-4">Select Location</p>
-                  <div className="flex flex-wrap gap-2">
-                    {locations.map((loc) => (
-                      <button
-                        key={loc}
-                        onClick={() => setSelectedLocation(loc)}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                          selectedLocation === loc 
-                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' 
-                            : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                        }`}
-                      >
-                        {loc}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Mobile Categories */}
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-4">Categories</p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setSelectedCategory("All")}
-                      className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                        selectedCategory === 'All' 
-                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' 
-                          : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                      }`}
-                    >
-                      All
-                    </button>
-                    {CATEGORIES.map((cat) => (
-                      <button
-                        key={cat.slug}
-                        onClick={() => setSelectedCategory(cat.slug)}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                          selectedCategory === cat.slug 
-                            ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200' 
-                            : 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                        }`}
-                      >
-                        {cat.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Mobile Menu Items */}
-                <div className="space-y-2">
-                  <p className="text-[10px] font-bold text-emerald-400 uppercase tracking-widest mb-4">Marketplace</p>
-                  {profileMenuItems.map((item, index) => (
-                    item.href ? (
-                      <Link
-                        key={index}
-                        to={item.href}
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <h3 className="text-xl font-black text-emerald-950">Join the movement</h3>
+                      <p className="text-sm text-emerald-600/70 font-medium leading-relaxed">Start swapping and saving the planet today. It's free and easy!</p>
+                      <Link 
+                        to="/auth" 
                         onClick={() => setIsMenuOpen(false)}
-                        className="flex items-center gap-4 p-3 rounded-xl hover:bg-emerald-50 transition-colors"
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3.5 bg-emerald-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-emerald-200 active:scale-95 transition-transform"
                       >
-                        <item.icon className={`w-5 h-5 ${item.color}`} />
-                        <span className="font-medium text-emerald-900">{item.label}</span>
+                        Get Started
+                        <ArrowRight className="w-4 h-4" />
                       </Link>
-                    ) : (
-                      <button
-                        key={index}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-6 space-y-8">
+                  {/* Search Section */}
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">Search & Filters</label>
+                    <form 
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        setIsMenuOpen(false);
+                        if (window.location.pathname !== '/') {
+                          navigate('/');
+                          setTimeout(() => {
+                            document.getElementById('marketplace')?.scrollIntoView({ behavior: 'smooth' });
+                          }, 100);
+                        } else {
+                          document.getElementById('marketplace')?.scrollIntoView({ behavior: 'smooth' });
+                        }
+                      }}
+                      className="space-y-3"
+                    >
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-emerald-500" />
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-12 pr-4 py-4 border border-emerald-100 rounded-2xl bg-emerald-50/30 focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-medium"
+                          placeholder="Search items..."
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Location Selector (Mobile) */}
+                        <div className="relative">
+                          <button 
+                            type="button"
+                            onClick={() => setIsLocationOpen(!isLocationOpen)}
+                            className="w-full flex items-center justify-between px-4 py-3 bg-emerald-50/50 border border-emerald-100 rounded-xl text-xs font-bold text-emerald-900"
+                          >
+                            <div className="flex items-center gap-2">
+                              <MapPin className="w-4 h-4 text-emerald-600" />
+                              <span className="truncate max-w-[80px]">{selectedLocation}</span>
+                            </div>
+                            <ChevronDown className={`w-3 h-3 transition-transform ${isLocationOpen ? 'rotate-180' : ''}`} />
+                          </button>
+                          
+                          <AnimatePresence>
+                            {isLocationOpen && (
+                              <motion.div
+                                initial={{ opacity: 0, y: 5 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: 5 }}
+                                className="absolute left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-emerald-50 z-20 max-h-48 overflow-y-auto py-2"
+                              >
+                                {locations.map((loc) => (
+                                  <button
+                                    key={loc}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedLocation(loc);
+                                      setIsLocationOpen(false);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-xs font-medium hover:bg-emerald-50 text-emerald-800"
+                                  >
+                                    {loc}
+                                  </button>
+                                ))}
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+
+                        {/* Filter Button (Mobile) */}
+                        <button 
+                          type="button"
+                          onClick={() => setIsFilterOpen(!isFilterOpen)}
+                          className={`w-full flex items-center justify-between px-4 py-3 border rounded-xl text-xs font-bold transition-all ${
+                            selectedCategory !== 'All' 
+                              ? 'bg-emerald-600 border-emerald-600 text-white' 
+                              : 'bg-emerald-50/50 border-emerald-100 text-emerald-900'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Filter className="w-4 h-4" />
+                            <span className="truncate max-w-[80px]">
+                              {selectedCategory === 'All' ? 'Filters' : CATEGORIES.find(c => c.slug === selectedCategory)?.name}
+                            </span>
+                          </div>
+                          <ChevronDown className={`w-3 h-3 transition-transform ${isFilterOpen ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+
+                      {/* Expanded Filter Options */}
+                      <AnimatePresence>
+                        {isFilterOpen && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="overflow-hidden bg-emerald-50/30 rounded-2xl border border-emerald-100"
+                          >
+                            <div className="p-2 grid grid-cols-2 gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedCategory("All");
+                                  setIsFilterOpen(false);
+                                }}
+                                className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left ${selectedCategory === 'All' ? 'bg-emerald-600 text-white' : 'text-emerald-800 hover:bg-white'}`}
+                              >
+                                All Categories
+                              </button>
+                              {CATEGORIES.map((cat) => (
+                                <button
+                                  key={cat.slug}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedCategory(cat.slug);
+                                    setIsFilterOpen(false);
+                                  }}
+                                  className={`px-3 py-2 text-[10px] font-bold rounded-lg text-left ${selectedCategory === cat.slug ? 'bg-emerald-600 text-white' : 'text-emerald-800 hover:bg-white'}`}
+                                >
+                                  {cat.name}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </form>
+                  </div>
+
+                  {/* Quick Actions */}
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">Quick Actions</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Link 
+                        to="/chats" 
+                        onClick={() => setIsMenuOpen(false)}
+                        className="flex flex-col items-center gap-2 p-4 bg-white border border-emerald-100 rounded-2xl hover:bg-emerald-50 transition-all group"
+                      >
+                        <div className="p-2 bg-emerald-50 rounded-xl group-hover:scale-110 transition-transform">
+                          <MessageCircle className="w-6 h-6 text-emerald-600" />
+                        </div>
+                        <span className="text-xs font-bold text-emerald-900">Messages</span>
+                      </Link>
+                      <button 
                         onClick={() => {
                           setIsMenuOpen(false);
-                          item.onClick?.();
+                          setIsNotificationsOpen(true);
                         }}
-                        className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-emerald-50 transition-colors"
+                        className="flex flex-col items-center gap-2 p-4 bg-white border border-emerald-100 rounded-2xl hover:bg-emerald-50 transition-all group"
                       >
-                        <item.icon className={`w-5 h-5 ${item.color}`} />
-                        <span className="font-medium text-emerald-900 text-left">{item.label}</span>
+                        <div className="p-2 bg-emerald-50 rounded-xl group-hover:scale-110 transition-transform relative">
+                          <Bell className="w-6 h-6 text-emerald-600" />
+                          {unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white">
+                              {unreadCount}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs font-bold text-emerald-900">Notifications</span>
                       </button>
-                    )
-                  ))}
+                    </div>
+                  </div>
+
+                  {/* Account Links */}
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">Account & Settings</label>
+                    <div className="space-y-2">
+                      {profileMenuItems.map((item, index) => (
+                        item.href ? (
+                          <Link
+                            key={index}
+                            to={item.href}
+                            onClick={() => setIsMenuOpen(false)}
+                            className="flex items-center justify-between p-4 bg-white border border-emerald-50 rounded-2xl hover:bg-emerald-50 hover:border-emerald-100 transition-all group"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="p-2 bg-emerald-50/50 rounded-xl group-hover:scale-110 transition-transform">
+                                <item.icon className={`w-5 h-5 ${item.color}`} />
+                              </div>
+                              <span className="font-bold text-emerald-900">{item.label}</span>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-emerald-200 group-hover:text-emerald-600 transition-colors" />
+                          </Link>
+                        ) : (
+                          <button
+                            key={index}
+                            onClick={() => {
+                              setIsMenuOpen(false);
+                              item.onClick?.();
+                            }}
+                            className="w-full flex items-center justify-between p-4 bg-white border border-emerald-50 rounded-2xl hover:bg-emerald-50 hover:border-emerald-100 transition-all group"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="p-2 bg-emerald-50/50 rounded-xl group-hover:scale-110 transition-transform relative">
+                                <item.icon className={`w-5 h-5 ${item.color}`} />
+                                {item.badge ? (
+                                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white">
+                                    {item.badge}
+                                  </span>
+                                ) : null}
+                              </div>
+                              <span className="font-bold text-emerald-900">{item.label}</span>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-emerald-200 group-hover:text-emerald-600 transition-colors" />
+                          </button>
+                        )
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Categories Section */}
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-emerald-400 uppercase tracking-[0.2em]">Browse Categories</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {CATEGORIES.slice(0, 8).map((cat) => (
+                        <button
+                          key={cat.slug}
+                          onClick={() => {
+                            setSelectedCategory(cat.slug);
+                            setIsMenuOpen(false);
+                            if (window.location.pathname !== '/') navigate('/');
+                          }}
+                          className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50/30 border border-emerald-50 hover:bg-emerald-50 hover:border-emerald-100 transition-all text-left"
+                        >
+                          <span className="text-xs font-bold text-emerald-900">{cat.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="p-6 border-t border-emerald-50 space-y-4">
-                {user ? (
-                  <button 
-                    onClick={handleLogout}
-                    className="w-full py-4 bg-red-50 text-red-600 rounded-2xl font-bold border border-red-100"
-                  >
-                    Sign Out
-                  </button>
-                ) : (
-                  <Link 
-                    to="/auth"
-                    onClick={() => setIsMenuOpen(false)}
-                    className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200 flex items-center justify-center"
-                  >
-                    Login / Sign Up
-                  </Link>
-                )}
+              {/* Bottom Actions */}
+              <div className="p-6 bg-white border-t border-emerald-50 space-y-3">
                 <Link 
                   to="/sell" 
                   onClick={() => setIsMenuOpen(false)}
-                  className="w-full py-4 bg-emerald-50 text-emerald-700 rounded-2xl font-bold border border-emerald-100 flex items-center justify-center gap-2"
+                  className="w-full py-5 bg-emerald-600 text-white rounded-[2rem] font-black text-sm shadow-xl shadow-emerald-200 flex items-center justify-center gap-2 active:scale-95 transition-transform"
                 >
                   <PlusCircle className="w-5 h-5" />
-                  Sell Items
+                  List an Item
                 </Link>
+                
+                {!user && (
+                  <Link 
+                    to="/auth" 
+                    onClick={() => setIsMenuOpen(false)}
+                    className="w-full py-5 bg-white text-emerald-600 rounded-[2rem] font-black text-sm border-2 border-emerald-100 flex items-center justify-center gap-2 active:scale-95 transition-transform"
+                  >
+                    <LogIn className="w-5 h-5" />
+                    Sign In / Register
+                  </Link>
+                )}
               </div>
             </motion.div>
           </>
@@ -725,13 +909,13 @@ export default function Navbar() {
       {/* Mobile Language Selection Modal (Keep as modal for mobile UX) */}
       <AnimatePresence>
         {isLanguageOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:hidden">
+          <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 md:hidden">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsLanguageOpen(false)}
-              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-emerald-950/80 backdrop-blur-md"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.9, y: 20 }}

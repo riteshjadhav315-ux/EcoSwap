@@ -2,15 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllProducts, getFilteredProducts, searchProducts } from '../services/productService';
 import { Product } from '../types';
-import { motion } from 'framer-motion';
-import { Search, Filter, Recycle, ShieldCheck, Zap, Leaf, ArrowRight, Heart } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, Filter, Recycle, ShieldCheck, Zap, Leaf, ArrowRight, Heart, ShoppingCart } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSearch } from '../context/SearchContext';
+import { useCart } from '../context/CartContext';
 import { addToWishlist, removeFromWishlist, isInWishlist } from '../services/wishlistService';
 import { useNavigate } from 'react-router-dom';
 
 const Home = () => {
   const { user } = useAuth();
+  const { addToCart } = useCart();
   const { searchQuery, selectedCategory, selectedLocation, setSelectedLocation } = useSearch();
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
@@ -19,6 +21,8 @@ const Home = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -105,59 +109,59 @@ const Home = () => {
   return (
     <div className="bg-stone-50">
       {/* Hero Section */}
-      <section className="relative bg-[#E9F5F1] overflow-hidden pt-20 pb-32">
-        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+      <section className="relative bg-[#E9F5F1] overflow-hidden pt-2 lg:pt-4 pb-12 lg:pb-16">
+        <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-12 items-center">
           {/* Left Content */}
           <motion.div 
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
             className="relative z-10"
           >
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/50 backdrop-blur-sm border border-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-8">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/60 backdrop-blur-sm text-emerald-800 text-[10px] lg:text-xs font-black mb-4 border border-white/50 uppercase tracking-[0.2em] shadow-sm">
               <Recycle className="w-3 h-3" />
               Sustainable Marketplace
             </div>
-            <h1 className="text-6xl lg:text-[5.5rem] font-black text-[#064E3B] leading-[0.95] mb-8 tracking-tight">
-              Give Your Items a <br />
+            <h1 className="text-4xl sm:text-5xl lg:text-[4.5rem] xl:text-[5.5rem] font-black text-[#064E3B] leading-[1.1] lg:leading-[0.95] mb-4 lg:mb-6 tracking-tight">
+              Give Your Items a <br className="hidden sm:block" />
               <span className="text-emerald-600">Second Life</span>
             </h1>
-            <p className="text-xl text-emerald-900/60 mb-12 max-w-lg leading-relaxed font-medium">
+            <p className="text-base lg:text-lg xl:text-xl text-emerald-900/60 mb-6 lg:mb-8 max-w-lg leading-relaxed font-medium">
               Join thousands of people swapping, selling, and buying pre-loved goods. Reduce waste and save money with EcoSwap.
             </p>
             
-            <div className="flex flex-wrap gap-4 mb-16">
+            <div className="grid grid-cols-2 sm:flex sm:flex-row items-center gap-3 sm:gap-4 mb-6 lg:mb-8">
               <Link 
                 to="/sell" 
-                className="px-10 py-5 bg-[#059669] text-white rounded-[2rem] font-black hover:bg-emerald-700 transition-all shadow-2xl shadow-emerald-200/50 flex items-center gap-3 group text-lg"
+                className="flex-1 sm:flex-none px-4 sm:px-8 py-3.5 sm:py-4 bg-[#059669] text-white rounded-xl sm:rounded-2xl font-black hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200/50 flex items-center justify-center gap-2 group text-xs sm:text-base"
               >
                 Start Selling
-                <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
               <button 
                 onClick={() => document.getElementById('marketplace')?.scrollIntoView({ behavior: 'smooth' })}
-                className="px-10 py-5 bg-white text-emerald-900 border border-emerald-100 rounded-[2rem] font-black hover:bg-emerald-50 transition-all shadow-sm text-lg"
+                className="flex-1 sm:flex-none px-4 sm:px-8 py-3.5 sm:py-4 bg-white text-emerald-900 border border-emerald-100 rounded-xl sm:rounded-2xl font-black hover:bg-emerald-50 transition-all shadow-sm text-xs sm:text-base"
               >
                 Browse Items
               </button>
             </div>
 
-            <div className="flex gap-12">
-              <div className="flex items-center gap-3 text-[#064E3B] font-black text-sm uppercase tracking-wider">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <div className="flex flex-wrap gap-4 lg:gap-12">
+              <div className="flex items-center gap-2 lg:gap-3 text-[#064E3B] font-black text-[10px] lg:text-sm uppercase tracking-wider">
+                <div className="w-6 h-6 lg:w-8 lg:h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <ShieldCheck className="w-3 h-3 lg:w-4 lg:h-4 text-emerald-600" />
                 </div>
                 Secure Swaps
               </div>
-              <div className="flex items-center gap-3 text-[#064E3B] font-black text-sm uppercase tracking-wider">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <Zap className="w-4 h-4 text-emerald-600" />
+              <div className="flex items-center gap-2 lg:gap-3 text-[#064E3B] font-black text-[10px] lg:text-sm uppercase tracking-wider">
+                <div className="w-6 h-6 lg:w-8 lg:h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <Zap className="w-3 h-3 lg:w-4 lg:h-4 text-emerald-600" />
                 </div>
                 Fast Listing
               </div>
-              <div className="flex items-center gap-3 text-[#064E3B] font-black text-sm uppercase tracking-wider">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center">
-                  <Leaf className="w-4 h-4 text-emerald-600" />
+              <div className="flex items-center gap-2 lg:gap-3 text-[#064E3B] font-black text-[10px] lg:text-sm uppercase tracking-wider">
+                <div className="w-6 h-6 lg:w-8 lg:h-8 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <Leaf className="w-3 h-3 lg:w-4 lg:h-4 text-emerald-600" />
                 </div>
                 Eco-Friendly
               </div>
@@ -169,13 +173,13 @@ const Home = () => {
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.8, delay: 0.2 }}
-            className="relative"
+            className="relative mt-8 lg:mt-0"
           >
-            <div className="relative rounded-[4rem] overflow-hidden shadow-[0_32px_64px_-16px_rgba(5,150,105,0.2)] border-[12px] border-white group">
+            <div className="relative rounded-[2.5rem] lg:rounded-[4rem] overflow-hidden shadow-[0_32px_64px_-16px_rgba(5,150,105,0.2)] border-4 lg:border-[12px] border-white group">
               <img 
                 src="https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&q=80&w=1200" 
                 alt="Eco-Friendly Electronics Marketplace" 
-                className="w-full h-[600px] object-cover transition-transform duration-700 group-hover:scale-105"
+                className="w-full h-[300px] sm:h-[400px] lg:h-[480px] xl:h-[520px] object-cover transition-transform duration-700 group-hover:scale-105"
                 referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-tr from-emerald-900/10 to-transparent pointer-events-none" />
@@ -186,14 +190,14 @@ const Home = () => {
               initial={{ x: 50, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 0.8, type: "spring" }}
-              className="absolute -bottom-10 -left-10 bg-white p-8 rounded-[2.5rem] shadow-2xl border border-emerald-50 flex items-center gap-6 z-20"
+              className="absolute -bottom-4 -right-2 lg:-bottom-10 lg:-left-10 bg-white p-4 lg:p-8 rounded-[1.5rem] lg:rounded-[2.5rem] shadow-2xl border border-emerald-50 flex items-center gap-3 lg:gap-6 z-20 max-w-[240px] lg:max-w-none"
             >
-              <div className="w-16 h-16 bg-emerald-100 rounded-[1.25rem] flex items-center justify-center">
-                <Recycle className="w-8 h-8 text-emerald-600" />
+              <div className="w-10 h-10 lg:w-16 lg:h-16 bg-emerald-100 rounded-xl lg:rounded-[1.25rem] flex items-center justify-center shrink-0">
+                <Recycle className="w-5 h-5 lg:w-8 lg:h-8 text-emerald-600" />
               </div>
               <div>
-                <p className="text-3xl font-black text-[#064E3B]">12,400+</p>
-                <p className="text-sm font-bold text-emerald-500 uppercase tracking-tight">Items saved from landfill today</p>
+                <p className="text-lg lg:text-3xl font-black text-[#064E3B]">12,400+</p>
+                <p className="text-[8px] lg:text-sm font-bold text-emerald-500 uppercase tracking-tight">Items saved from landfill today</p>
               </div>
             </motion.div>
           </motion.div>
@@ -201,10 +205,10 @@ const Home = () => {
       </section>
 
       {/* Main Content: Products */}
-      <div id="marketplace" className="max-w-7xl mx-auto px-4 py-20">
-        <div className="flex items-center justify-between mb-12">
+      <div id="marketplace" className="max-w-7xl mx-auto px-4 py-12 lg:py-20">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
           <div>
-            <h2 className="text-3xl font-black text-emerald-950 mb-2">
+            <h2 className="text-2xl lg:text-3xl font-black text-emerald-950 mb-2">
               {searchQuery 
                 ? `Search Results for "${searchQuery}"${selectedLocation !== "All Locations" ? ` in ${selectedLocation}` : ""}` 
                 : selectedCategory !== "All" 
@@ -213,15 +217,16 @@ const Home = () => {
                     ? `Items in ${selectedLocation}`
                     : "Featured Items"}
             </h2>
-            <p className="text-emerald-800/60 font-medium">
+            <p className="text-emerald-800/60 font-medium text-sm lg:text-base">
               {products.length} {products.length === 1 ? 'result' : 'results'} found.
             </p>
           </div>
           <button 
             onClick={() => setShowFilters(!showFilters)}
-            className={`p-3 border rounded-2xl transition-all shadow-sm ${showFilters ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-emerald-100 text-emerald-600 hover:bg-emerald-50'}`}
+            className={`flex items-center justify-center gap-2 px-6 py-3 border rounded-2xl transition-all shadow-sm font-bold text-sm ${showFilters ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-emerald-100 text-emerald-600 hover:bg-emerald-50'}`}
           >
-            <Filter className="w-6 h-6" />
+            <Filter className="w-5 h-5" />
+            {showFilters ? 'Hide Filters' : 'Show Filters'}
           </button>
         </div>
 
@@ -317,6 +322,28 @@ const Home = () => {
                       >
                         <Heart className={`w-4 h-4 ${wishlistMap[product.id] ? 'fill-current' : ''}`} />
                       </button>
+                      <button
+                        onClick={async (e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!user) {
+                            navigate('/auth');
+                            return;
+                          }
+                          try {
+                            await addToCart(product);
+                            setToastMessage(`${product.title} added to cart!`);
+                            setShowToast(true);
+                            setTimeout(() => setShowToast(false), 3000);
+                          } catch (error) {
+                            console.error("Failed to add to cart:", error);
+                          }
+                        }}
+                        className="p-2.5 rounded-xl bg-white/80 backdrop-blur-md text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-lg border border-white/50 hover:scale-110"
+                        title="Add to Cart"
+                      >
+                        <ShoppingCart className="w-4 h-4" />
+                      </button>
                     </div>
                   </div>
                   <h3 className="font-bold text-emerald-950 group-hover:text-emerald-600 transition-colors truncate text-lg">
@@ -343,6 +370,23 @@ const Home = () => {
           </div>
         )}
       </div>
+
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {showToast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 50, x: '-50%' }}
+            className="fixed bottom-8 left-1/2 z-[100] bg-emerald-900 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-emerald-800/50 backdrop-blur-md"
+          >
+            <div className="bg-emerald-500 p-1 rounded-full">
+              <Zap className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-bold tracking-tight">{toastMessage}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

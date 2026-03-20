@@ -26,6 +26,7 @@ import { Payment } from "./models/Payment";
 import { Report } from "./models/Report";
 import { Review } from "./models/Review";
 import { SoldProduct } from "./models/SoldProduct";
+import { Cart } from "./models/Cart";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
@@ -1016,6 +1017,108 @@ async function startServer() {
     }
   });
 
+  // Cart
+  app.get("/api/cart/my", authenticate, async (req: any, res) => {
+    try {
+      const items = await Cart.find({ userId: req.user.uid }).sort({ createdAt: -1 });
+      res.json(items);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch cart" });
+    }
+  });
+
+  app.post("/api/cart", authenticate, async (req: any, res) => {
+    try {
+      const { productId } = req.body;
+      if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+        return res.status(400).json({ error: "Invalid product ID" });
+      }
+
+      const product = await Product.findById(productId);
+      if (!product) {
+        return res.status(404).json({ error: "Product not found" });
+      }
+      if (product.status === "sold") {
+        return res.status(409).json({ error: "This product has already been sold" });
+      }
+      if (product.sellerId === req.user.uid) {
+        return res.status(400).json({ error: "You cannot add your own product to cart" });
+      }
+
+      let cartItem = await Cart.findOne({ userId: req.user.uid, productId });
+      if (!cartItem) {
+        cartItem = new Cart({
+          userId: req.user.uid,
+          productId,
+          productTitle: product.title,
+          productPrice: product.price,
+          productImageUrl: product.imageUrl || product.images?.[0] || "",
+          quantity: 1,
+        });
+        await cartItem.save();
+      }
+
+      res.status(201).json(cartItem);
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        const existingItem = await Cart.findOne({
+          userId: req.user.uid,
+          productId: req.body.productId,
+        });
+        return res.json(existingItem);
+      }
+      console.error("Cart add error:", error);
+      res.status(500).json({ error: "Failed to add item to cart" });
+    }
+  });
+
+  app.patch("/api/cart/:id", authenticate, async (req: any, res) => {
+    try {
+      const quantity = Number(req.body.quantity);
+      if (!quantity || quantity < 1) {
+        return res.status(400).json({ error: "Quantity must be at least 1" });
+      }
+
+      const cartItem = await Cart.findOneAndUpdate(
+        { _id: req.params.id, userId: req.user.uid },
+        { quantity: 1 },
+        { new: true }
+      );
+
+      if (!cartItem) {
+        return res.status(404).json({ error: "Cart item not found" });
+      }
+
+      res.json(cartItem);
+    } catch (error) {
+      console.error("Cart update error:", error);
+      res.status(500).json({ error: "Failed to update cart" });
+    }
+  });
+
+  app.delete("/api/cart/clear/all", authenticate, async (req: any, res) => {
+    try {
+      await Cart.deleteMany({ userId: req.user.uid });
+      res.json({ message: "Cart cleared" });
+    } catch (error) {
+      console.error("Cart clear error:", error);
+      res.status(500).json({ error: "Failed to clear cart" });
+    }
+  });
+
+  app.delete("/api/cart/:id", authenticate, async (req: any, res) => {
+    try {
+      const cartItem = await Cart.findOneAndDelete({ _id: req.params.id, userId: req.user.uid });
+      if (!cartItem) {
+        return res.status(404).json({ error: "Cart item not found" });
+      }
+      res.json({ message: "Cart item removed" });
+    } catch (error) {
+      console.error("Cart delete error:", error);
+      res.status(500).json({ error: "Failed to remove cart item" });
+    }
+  });
+
   // Payments
   const razorpay = new Razorpay({
     key_id: process.env.RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
@@ -1048,6 +1151,46 @@ async function startServer() {
     } catch (error) {
       console.error("Error creating Razorpay order:", error);
       res.status(500).json({ error: "Failed to create payment order" });
+    }
+  });
+
+  app.post("/api/payment/create-cart-order", authenticate, async (req: any, res) => {
+    try {
+      const cartItems = await Cart.find({ userId: req.user.uid });
+      if (cartItems.length === 0) {
+        return res.status(400).json({ error: "Your cart is empty" });
+      }
+
+      let totalAmount = 0;
+      for (const item of cartItems) {
+        if (!mongoose.Types.ObjectId.isValid(item.productId)) {
+          return res.status(400).json({ error: "Cart contains an invalid product" });
+        }
+
+        const product = await Product.findById(item.productId);
+        if (!product) {
+          return res.status(404).json({ error: `Product not found for cart item ${item.productTitle}` });
+        }
+        if (product.status === "sold") {
+          return res.status(409).json({ error: `"${product.title}" has already been sold` });
+        }
+        if (product.sellerId === req.user.uid) {
+          return res.status(400).json({ error: "You cannot buy your own product" });
+        }
+
+        totalAmount += product.price;
+      }
+
+      const order = await razorpay.orders.create({
+        amount: Math.round(totalAmount * 100),
+        currency: "INR",
+        receipt: `cart_receipt_${Date.now()}`,
+      });
+
+      res.json(order);
+    } catch (error) {
+      console.error("Error creating cart Razorpay order:", error);
+      res.status(500).json({ error: "Failed to create cart payment order" });
     }
   });
 
@@ -1091,6 +1234,23 @@ async function startServer() {
     await product.save();
 
     return soldProduct;
+  };
+
+  const notifySellerOfSale = async (product: any, productId: string) => {
+    try {
+      const notification = new Notification({
+        userId: product.sellerId,
+        type: "system",
+        title: "Product Sold!",
+        message: `Your product "${product.title}" has been sold for Rs.${product.price}.`,
+        link: `/product/${productId}`,
+      });
+      await notification.save();
+      io.emit(`notification_${product.sellerId}`, notification);
+      console.log(`Notification sent to seller ${product.sellerId}`);
+    } catch (error) {
+      console.error("Error sending notification to seller:", error);
+    }
   };
 
   const processPaymentSuccess = async (productId: string, buyerId: string, paymentDetails: any) => {
@@ -1172,29 +1332,131 @@ async function startServer() {
     return { success: true, message: "Payment processed successfully", paymentId: payment.paymentId };
   };
 
+  const processCartPaymentSuccess = async (
+    productIds: string[],
+    buyerId: string,
+    paymentDetails: any
+  ) => {
+    const uniqueProductIds = [...new Set(productIds)];
+    if (uniqueProductIds.length === 0) {
+      throw new Error("Cart is empty");
+    }
+
+    const paymentLookup: Record<string, string>[] = [];
+    if (paymentDetails.razorpay_payment_id) {
+      paymentLookup.push({ paymentId: paymentDetails.razorpay_payment_id });
+    }
+    if (paymentDetails.razorpay_order_id) {
+      paymentLookup.push({ orderId: paymentDetails.razorpay_order_id });
+    }
+
+    if (paymentLookup.length > 0) {
+      const existingPayment = await Payment.findOne({ $or: paymentLookup });
+      if (existingPayment) {
+        return {
+          success: true,
+          message: "Payment already processed",
+          paymentId: existingPayment.paymentId,
+        };
+      }
+    }
+
+    const buyer = await User.findOne({ uid: buyerId });
+    const cartItems = await Cart.find({
+      userId: buyerId,
+      productId: { $in: uniqueProductIds },
+    });
+
+    if (cartItems.length === 0) {
+      throw new Error("Cart is empty");
+    }
+
+    const products = await Product.find({
+      _id: { $in: uniqueProductIds.map((id) => new mongoose.Types.ObjectId(id)) },
+    });
+
+    if (products.length !== uniqueProductIds.length) {
+      throw new Error("One or more cart products no longer exist");
+    }
+
+    for (const product of products) {
+      if (product.sellerId === buyerId) {
+        throw new Error("You cannot buy your own product");
+      }
+      if (product.status === "sold") {
+        throw new Error(`"${product.title}" has already been sold`);
+      }
+    }
+
+    for (const product of products) {
+      const payment = new Payment({
+        orderId: paymentDetails.razorpay_order_id || `sim_${Date.now()}`,
+        paymentId: paymentDetails.razorpay_payment_id || `sim_pay_${Date.now()}`,
+        signature: paymentDetails.razorpay_signature || "simulated",
+        productId: product._id,
+        buyerId,
+        amount: product.price,
+        currency: "INR",
+        status: "completed",
+      });
+
+      await payment.save();
+      await moveProductToSold(String(product._id), buyerId, buyer?.name);
+      await notifySellerOfSale(product, String(product._id));
+    }
+
+    await Cart.deleteMany({ userId: buyerId });
+
+    return {
+      success: true,
+      message: "Cart payment processed successfully",
+      paymentId: paymentDetails.razorpay_payment_id || `sim_pay_${Date.now()}`,
+      processedProducts: products.length,
+    };
+  };
+
   const verifyPaymentHandler = async (req: any, res: express.Response) => {
     try {
       console.log("Received payment verification request:", req.body);
-      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, productId, simulation } = req.body;
+      const {
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature,
+        productId,
+        productIds,
+        simulation,
+      } = req.body;
       const buyerId = req.user.uid;
+      const cartProductIds = Array.isArray(productIds)
+        ? productIds.filter((id: unknown): id is string => typeof id === "string")
+        : [];
 
-      if (!productId) {
-        return res.status(400).json({ error: "Missing required field: productId" });
+      if (!productId && cartProductIds.length === 0) {
+        return res.status(400).json({ error: "Missing required field: productId or productIds" });
       }
-      if (!mongoose.Types.ObjectId.isValid(productId)) {
+      if (productId && !mongoose.Types.ObjectId.isValid(productId)) {
         return res.status(400).json({ error: "Invalid product ID" });
+      }
+      if (cartProductIds.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+        return res.status(400).json({ error: "One or more cart product IDs are invalid" });
       }
 
       // Allow simulation in test mode or if explicitly requested
       const isTestMode = (process.env.RAZORPAY_KEY_ID || "").startsWith("rzp_test_");
       
       if (simulation === true || (isTestMode && !razorpay_signature)) {
-        console.log("Processing simulated/test payment for product:", productId);
-        const result = await processPaymentSuccess(productId, buyerId, {
+        console.log("Processing simulated/test payment:", {
+          productId,
+          productIds: cartProductIds,
+        });
+        const simulatedDetails = {
           razorpay_order_id: razorpay_order_id || `test_order_${Date.now()}`,
           razorpay_payment_id: razorpay_payment_id || `test_pay_${Date.now()}`,
           razorpay_signature: razorpay_signature || "test_signature"
-        });
+        };
+        const result = cartProductIds.length > 0
+          ? await processCartPaymentSuccess(cartProductIds, buyerId, simulatedDetails)
+          : await processPaymentSuccess(productId, buyerId, simulatedDetails);
         return res.json(result);
       }
 
@@ -1211,11 +1473,14 @@ async function startServer() {
       console.log("Signature verification:", { expected: expectedSignature, received: razorpay_signature });
 
       if (expectedSignature === razorpay_signature) {
-        const result = await processPaymentSuccess(productId, buyerId, {
+        const verifiedDetails = {
           razorpay_order_id,
           razorpay_payment_id,
           razorpay_signature
-        });
+        };
+        const result = cartProductIds.length > 0
+          ? await processCartPaymentSuccess(cartProductIds, buyerId, verifiedDetails)
+          : await processPaymentSuccess(productId, buyerId, verifiedDetails);
         res.json(result);
       } else {
         console.error("Invalid Razorpay signature");
@@ -1224,7 +1489,13 @@ async function startServer() {
     } catch (error) {
       console.error("Error verifying payment:", error);
       const message = error instanceof Error ? error.message : String(error);
-      if (message === "This product has already been sold") {
+      if (message === "Cart is empty") {
+        return res.status(400).json({ error: message });
+      }
+      if (message === "One or more cart products no longer exist") {
+        return res.status(404).json({ error: message });
+      }
+      if (message === "This product has already been sold" || message.includes("has already been sold")) {
         return res.status(409).json({ error: message });
       }
       if (message === "You cannot buy your own product") {
