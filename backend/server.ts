@@ -54,6 +54,8 @@ async function startServer() {
     process.env.CLOUDINARY_API_KEY &&
     process.env.CLOUDINARY_API_SECRET
   );
+  const cloudinaryUploadsEnabled = process.env.CLOUDINARY_ENABLED === "true";
+  const useCloudinaryUploads = cloudinaryUploadsEnabled && hasCloudinaryConfig;
 
   // Authentication Middleware
   const authenticate = (req: any, res: any, next: any) => {
@@ -142,7 +144,7 @@ async function startServer() {
 
   let upload = localUpload;
 
-  if (hasCloudinaryConfig) {
+  if (useCloudinaryUploads) {
     cloudinary.config({
       cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
       api_key: process.env.CLOUDINARY_API_KEY,
@@ -158,6 +160,10 @@ async function startServer() {
     });
 
     upload = multer({ storage: cloudinaryStorage });
+  } else if (cloudinaryUploadsEnabled) {
+    console.warn("CLOUDINARY_ENABLED is true, but Cloudinary config is incomplete. Falling back to local uploads.");
+  } else if (hasCloudinaryConfig) {
+    console.warn("Cloudinary credentials detected, but CLOUDINARY_ENABLED is not true. Using local uploads.");
   } else {
     console.warn("Cloudinary config missing. Falling back to local uploads.");
   }
@@ -175,6 +181,18 @@ async function startServer() {
       ? `${req.protocol}://${req.get("host")}/uploads/${filename}`
       : "";
   };
+
+  const runUpload = (middleware: any, req: any, res: any) =>
+    new Promise<void>((resolve, reject) => {
+      middleware(req, res, (error: any) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+
+        resolve();
+      });
+    });
 
   // Auth Routes
   app.post("/api/auth/register", async (req, res) => {
@@ -608,8 +626,9 @@ async function startServer() {
     }
   });
 
-  app.post("/api/products", authenticate, upload.array("images", 5), async (req: any, res) => {
+  app.post("/api/products", authenticate, async (req: any, res) => {
     try {
+      await runUpload(upload.array("images", 5), req, res);
       console.log("Creating product with data:", req.body);
       console.log("Uploaded files:", req.files);
 
@@ -630,12 +649,14 @@ async function startServer() {
       res.status(201).json(product);
     } catch (error) {
       console.error("Error creating product:", error);
-      res.status(500).json({ error: "Failed to create product", details: error instanceof Error ? error.message : String(error) });
+      const details = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: `Failed to create product: ${details}` });
     }
   });
 
-  app.patch("/api/products/:id", authenticate, upload.array("images", 5), async (req: any, res) => {
+  app.patch("/api/products/:id", authenticate, async (req: any, res) => {
     try {
+      await runUpload(upload.array("images", 5), req, res);
       const product = await Product.findById(req.params.id);
       if (!product) return res.status(404).json({ error: "Product not found" });
       
@@ -665,7 +686,8 @@ async function startServer() {
       res.json(updatedProduct);
     } catch (error) {
       console.error("Error updating product:", error);
-      res.status(500).json({ error: "Failed to update product" });
+      const details = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: `Failed to update product: ${details}` });
     }
   });
 
@@ -720,10 +742,17 @@ async function startServer() {
   });
 
   // Upload
-  app.post("/api/upload", upload.single("file"), (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-    const url = toUploadedFileUrl(req, req.file);
-    res.json({ url });
+  app.post("/api/upload", async (req, res) => {
+    try {
+      await runUpload(upload.single("file"), req, res);
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+      const url = toUploadedFileUrl(req, req.file);
+      res.json({ url });
+    } catch (error) {
+      console.error("Error uploading file:", error);
+      const details = error instanceof Error ? error.message : String(error);
+      res.status(500).json({ error: `Failed to upload file: ${details}` });
+    }
   });
 
   // Chats
