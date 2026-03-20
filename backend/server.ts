@@ -1,3 +1,4 @@
+import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 dotenv.config();
@@ -48,22 +49,11 @@ async function startServer() {
   res.json({ message: "API is working 🚀" });
   });
 
-  // Cloudinary Configuration
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-  });
-
-  const cloudinaryStorage = new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-      folder: "ecoswap_products",
-      allowed_formats: ["jpg", "png", "jpeg"],
-    } as any,
-  });
-
-  const upload = multer({ storage: cloudinaryStorage });
+  const hasCloudinaryConfig = Boolean(
+    process.env.CLOUDINARY_CLOUD_NAME &&
+    process.env.CLOUDINARY_API_KEY &&
+    process.env.CLOUDINARY_API_SECRET
+  );
 
   // Authentication Middleware
   const authenticate = (req: any, res: any, next: any) => {
@@ -134,10 +124,14 @@ async function startServer() {
     }
   }
 
-  // Local Multer for other file uploads if needed
+  // Local Multer for file uploads when Cloudinary is unavailable
+  const uploadsDir = path.join(__dirname, "../uploads");
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  app.use("/uploads", express.static(uploadsDir));
+
   const localStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-      cb(null, path.join(__dirname, "../uploads"));
+      cb(null, uploadsDir);
     },
     filename: (req, file, cb) => {
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -145,6 +139,42 @@ async function startServer() {
     },
   });
   const localUpload = multer({ storage: localStorage });
+
+  let upload = localUpload;
+
+  if (hasCloudinaryConfig) {
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
+
+    const cloudinaryStorage = new CloudinaryStorage({
+      cloudinary: cloudinary,
+      params: {
+        folder: "ecoswap_products",
+        allowed_formats: ["jpg", "png", "jpeg"],
+      } as any,
+    });
+
+    upload = multer({ storage: cloudinaryStorage });
+  } else {
+    console.warn("Cloudinary config missing. Falling back to local uploads.");
+  }
+
+  const toUploadedFileUrl = (req: express.Request, file: any) => {
+    if (typeof file?.path === "string" && /^https?:\/\//i.test(file.path)) {
+      return file.path;
+    }
+
+    const filename =
+      file?.filename ||
+      (typeof file?.path === "string" ? path.basename(file.path) : "");
+
+    return filename
+      ? `${req.protocol}://${req.get("host")}/uploads/${filename}`
+      : "";
+  };
 
   // Auth Routes
   app.post("/api/auth/register", async (req, res) => {
@@ -583,7 +613,9 @@ async function startServer() {
       console.log("Creating product with data:", req.body);
       console.log("Uploaded files:", req.files);
 
-      const imageUrls = (req.files as any[]).map(file => file.path);
+      const imageUrls = ((req.files as any[]) || [])
+        .map((file) => toUploadedFileUrl(req, file))
+        .filter(Boolean);
 
       const productData = {
         ...req.body,
@@ -615,7 +647,9 @@ async function startServer() {
       if (updateData.price) updateData.price = Number(updateData.price);
 
       if (req.files && (req.files as any[]).length > 0) {
-        const imageUrls = (req.files as any[]).map(file => file.path);
+        const imageUrls = (req.files as any[])
+          .map((file) => toUploadedFileUrl(req, file))
+          .filter(Boolean);
         updateData.images = imageUrls;
         updateData.imageUrl = imageUrls[0];
       }
@@ -688,7 +722,7 @@ async function startServer() {
   // Upload
   app.post("/api/upload", upload.single("file"), (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-    const url = `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    const url = toUploadedFileUrl(req, req.file);
     res.json({ url });
   });
 
@@ -1128,9 +1162,11 @@ async function startServer() {
   });
 
   // Payments
+  const razorpayKeyId = process.env.RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo";
+  const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || "8Dm7YFRZKJaQ5EKxSsbSFzIG";
   const razorpay = new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
-    key_secret: process.env.RAZORPAY_KEY_SECRET || "8Dm7YFRZKJaQ5EKxSsbSFzIG",
+    key_id: razorpayKeyId,
+    key_secret: razorpayKeySecret,
   });
 
   app.post("/api/payment/create-order", authenticate, async (req: any, res) => {
@@ -1155,7 +1191,7 @@ async function startServer() {
       };
 
       const order = await razorpay.orders.create(options);
-      res.json(order);
+      res.json({ ...order, key: razorpayKeyId });
     } catch (error) {
       console.error("Error creating Razorpay order:", error);
       res.status(500).json({ error: "Failed to create payment order" });
@@ -1195,7 +1231,7 @@ async function startServer() {
         receipt: `cart_receipt_${Date.now()}`,
       });
 
-      res.json(order);
+      res.json({ ...order, key: razorpayKeyId });
     } catch (error) {
       console.error("Error creating cart Razorpay order:", error);
       res.status(500).json({ error: "Failed to create cart payment order" });

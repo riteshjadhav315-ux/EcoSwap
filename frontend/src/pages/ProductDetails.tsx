@@ -207,7 +207,7 @@ export default function ProductDetails() {
 
       // 2. Open Razorpay Popup
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
+        key: order.key || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
         amount: order.amount,
         currency: order.currency,
         name: "EcoSwap",

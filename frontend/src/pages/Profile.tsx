@@ -37,7 +37,7 @@ export default function Profile() {
       
       // 2. Handle payment (Razorpay)
       const options = {
-        key: (import.meta as any).env?.VITE_RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
+        key: order.key || (import.meta as any).env?.VITE_RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
         amount: order.amount,
         currency: order.currency,
         name: "EcoSwap Marketplace",
