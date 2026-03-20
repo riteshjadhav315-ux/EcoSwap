@@ -189,12 +189,19 @@ async function startServer() {
 
   app.post("/api/auth/google", async (req, res) => {
     try {
-      const { code } = req.body;
-      const { tokens } = await client.getToken({
-        code,
-        redirect_uri: "postmessage",
-      });
-      const idToken = tokens.id_token;
+      const { code, credential } = req.body;
+      let idToken: string | undefined;
+
+      if (credential) {
+        idToken = credential;
+      } else if (code) {
+        const { tokens } = await client.getToken({
+          code,
+          redirect_uri: "postmessage",
+        });
+        idToken = tokens.id_token || undefined;
+      }
+
       if (!idToken) return res.status(400).json({ error: "Invalid Google token" });
 
       const ticket = await client.verifyIdToken({
@@ -226,9 +233,10 @@ async function startServer() {
 
       const token = jwt.sign({ uid: user.uid, role: user.role }, JWT_SECRET);
       res.json({ token, user });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Google Auth Error:", error);
-      res.status(500).json({ error: "Google authentication failed" });
+      const message = error?.message || "Google authentication failed";
+      res.status(400).json({ error: message });
     }
   });
 
