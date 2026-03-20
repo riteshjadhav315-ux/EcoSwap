@@ -1,11 +1,16 @@
-import fs from "fs";
-import path from "path";
 import dotenv from "dotenv";
-dotenv.config();
+import path from "path";
+import fs from "fs";
+const dotenvPath = path.resolve(process.cwd(), "backend/.env");
+if (fs.existsSync(dotenvPath)) {
+  dotenv.config({ path: dotenvPath });
+} else {
+  dotenv.config();
+}
 // Silent loading - variables are usually provided by the environment in this platform
 
 import express from "express";
-//import { createServer as createViteServer } from "vite";
+import { createServer as createViteServer } from "vite";
 import mongoose from "mongoose";
 import cors from "cors";
 import multer from "multer";
@@ -45,17 +50,144 @@ async function startServer() {
   // Middleware
   app.use(cors());
   app.use(express.json());
-  app.get("/api", (req, res) => {
-  res.json({ message: "API is working 🚀" });
+  
+  // Ensure uploads directory exists at the root
+  const uploadPath = path.join(process.cwd(), "uploads");
+  if (!fs.existsSync(uploadPath)) {
+    console.log("Creating uploads directory at:", uploadPath);
+    fs.mkdirSync(uploadPath, { recursive: true });
+  }
+  try {
+    fs.accessSync(uploadPath, fs.constants.W_OK);
+    console.log("Uploads directory is writable at:", uploadPath);
+  } catch (err) {
+    console.error("CRITICAL: Uploads directory is NOT writable:", err);
+  }
+  app.use("/uploads", express.static(uploadPath));
+
+  // Cloudinary Configuration
+  const isCloudinaryConfigured = Boolean(
+    (process.env.CLOUDINARY_URL && process.env.CLOUDINARY_URL.startsWith("cloudinary://")) ||
+    (process.env.CLOUDINARY_CLOUD_NAME && 
+     process.env.CLOUDINARY_CLOUD_NAME.trim() !== "" &&
+     process.env.CLOUDINARY_CLOUD_NAME !== "your_cloud_name" &&
+     !process.env.CLOUDINARY_CLOUD_NAME.includes("placeholder") &&
+     process.env.CLOUDINARY_API_KEY && 
+     process.env.CLOUDINARY_API_KEY.trim() !== "" &&
+     process.env.CLOUDINARY_API_KEY !== "your_api_key" &&
+     process.env.CLOUDINARY_API_SECRET &&
+     process.env.CLOUDINARY_API_SECRET.trim() !== "" &&
+     process.env.CLOUDINARY_API_SECRET !== "your_api_secret")
+  );
+
+  console.log("Cloudinary Configuration Check:", {
+    isConfigured: isCloudinaryConfigured,
+    hasUrl: Boolean(process.env.CLOUDINARY_URL),
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME ? `${process.env.CLOUDINARY_CLOUD_NAME.substring(0, 3)}...` : "not set",
+    hasApiKey: Boolean(process.env.CLOUDINARY_API_KEY),
+    hasApiSecret: Boolean(process.env.CLOUDINARY_API_SECRET)
   });
 
-  const hasCloudinaryConfig = Boolean(
-    process.env.CLOUDINARY_CLOUD_NAME &&
-    process.env.CLOUDINARY_API_KEY &&
-    process.env.CLOUDINARY_API_SECRET
-  );
-  const cloudinaryUploadsEnabled = process.env.CLOUDINARY_ENABLED === "true";
-  const useCloudinaryUploads = cloudinaryUploadsEnabled && hasCloudinaryConfig;
+  let storage;
+  try {
+    if (isCloudinaryConfigured) {
+      if (process.env.CLOUDINARY_URL) {
+        cloudinary.config();
+      } else {
+        cloudinary.config({
+          cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+          api_key: process.env.CLOUDINARY_API_KEY,
+          api_secret: process.env.CLOUDINARY_API_SECRET,
+        });
+      }
+
+      storage = new CloudinaryStorage({
+        cloudinary: cloudinary,
+        params: {
+          folder: "ecoswap_products",
+          // Removing allowed_formats to be more permissive during debugging
+          // allowed_formats: ["jpg", "png", "jpeg"],
+        } as any,
+      });
+      console.log("Using Cloudinary storage for uploads");
+    } else {
+      throw new Error("Cloudinary not configured or using placeholders.");
+    }
+  } catch (e) {
+    console.log("Falling back to local storage due to:", (e as Error).message);
+    storage = multer.diskStorage({
+      destination: (req, file, cb) => {
+        cb(null, uploadPath);
+      },
+      filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+        cb(null, uniqueSuffix + "-" + file.originalname);
+      },
+    });
+  }
+
+  const upload = multer({ 
+    storage,
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit per file
+    }
+  });
+
+  // Custom upload middleware to handle errors
+  const handleUpload = (req: any, res: any, next: any) => {
+    upload.array("images", 5)(req, res, (err: any) => {
+      if (err) {
+        // Log the full error object for better diagnostics
+        console.error("Multer upload error full details:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+        
+        let errorMessage = "Failed to upload images.";
+        let details = err.message || "Unknown upload error";
+        
+        if (isCloudinaryConfigured) {
+          errorMessage += " This usually happens if Cloudinary is misconfigured or unreachable.";
+        }
+
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          errorMessage = "One or more images are too large. Max size is 5MB.";
+          details = "File size limit exceeded";
+        } else if (err.code === 'LIMIT_FILE_COUNT') {
+          errorMessage = "Too many images. Max is 5.";
+          details = "File count limit exceeded";
+        }
+
+        return res.status(500).json({ 
+          error: errorMessage, 
+          details: details,
+          code: err.code,
+          storageErrors: err.storageErrors || [],
+          hint: isCloudinaryConfigured ? "Check your Cloudinary credentials or clear them to use local storage." : "Check server logs for directory permission issues."
+        });
+      }
+      next();
+    });
+  };
+
+  const handleSingleUpload = (req: any, res: any, next: any) => {
+    upload.single("file")(req, res, (err: any) => {
+      if (err) {
+        console.error("Multer single upload error:", JSON.stringify(err, Object.getOwnPropertyNames(err), 2));
+        let errorMessage = "Failed to upload file.";
+        let details = err.message || "Unknown upload error";
+
+        if (isCloudinaryConfigured) {
+          errorMessage += " This usually happens if Cloudinary is misconfigured.";
+        }
+
+        return res.status(500).json({ 
+          error: errorMessage, 
+          details: details,
+          code: err.code,
+          storageErrors: err.storageErrors || []
+        });
+      }
+      next();
+    });
+  };
 
   // Authentication Middleware
   const authenticate = (req: any, res: any, next: any) => {
@@ -126,14 +258,10 @@ async function startServer() {
     }
   }
 
-  // Local Multer for file uploads when Cloudinary is unavailable
-  const uploadsDir = path.join(__dirname, "../uploads");
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  app.use("/uploads", express.static(uploadsDir));
-
+  // Local Multer for other file uploads if needed
   const localStorage = multer.diskStorage({
     destination: (req, file, cb) => {
-      cb(null, uploadsDir);
+      cb(null, path.join(__dirname, "../uploads"));
     },
     filename: (req, file, cb) => {
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
@@ -141,58 +269,6 @@ async function startServer() {
     },
   });
   const localUpload = multer({ storage: localStorage });
-
-  let upload = localUpload;
-
-  if (useCloudinaryUploads) {
-    cloudinary.config({
-      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-      api_key: process.env.CLOUDINARY_API_KEY,
-      api_secret: process.env.CLOUDINARY_API_SECRET,
-    });
-
-    const cloudinaryStorage = new CloudinaryStorage({
-      cloudinary: cloudinary,
-      params: {
-        folder: "ecoswap_products",
-        allowed_formats: ["jpg", "png", "jpeg"],
-      } as any,
-    });
-
-    upload = multer({ storage: cloudinaryStorage });
-  } else if (cloudinaryUploadsEnabled) {
-    console.warn("CLOUDINARY_ENABLED is true, but Cloudinary config is incomplete. Falling back to local uploads.");
-  } else if (hasCloudinaryConfig) {
-    console.warn("Cloudinary credentials detected, but CLOUDINARY_ENABLED is not true. Using local uploads.");
-  } else {
-    console.warn("Cloudinary config missing. Falling back to local uploads.");
-  }
-
-  const toUploadedFileUrl = (req: express.Request, file: any) => {
-    if (typeof file?.path === "string" && /^https?:\/\//i.test(file.path)) {
-      return file.path;
-    }
-
-    const filename =
-      file?.filename ||
-      (typeof file?.path === "string" ? path.basename(file.path) : "");
-
-    return filename
-      ? `${req.protocol}://${req.get("host")}/uploads/${filename}`
-      : "";
-  };
-
-  const runUpload = (middleware: any, req: any, res: any) =>
-    new Promise<void>((resolve, reject) => {
-      middleware(req, res, (error: any) => {
-        if (error) {
-          reject(error);
-          return;
-        }
-
-        resolve();
-      });
-    });
 
   // Auth Routes
   app.post("/api/auth/register", async (req, res) => {
@@ -237,19 +313,12 @@ async function startServer() {
 
   app.post("/api/auth/google", async (req, res) => {
     try {
-      const { code, credential } = req.body;
-      let idToken: string | undefined;
-
-      if (credential) {
-        idToken = credential;
-      } else if (code) {
-        const { tokens } = await client.getToken({
-          code,
-          redirect_uri: "postmessage",
-        });
-        idToken = tokens.id_token || undefined;
-      }
-
+      const { code } = req.body;
+      const { tokens } = await client.getToken({
+        code,
+        redirect_uri: "postmessage",
+      });
+      const idToken = tokens.id_token;
       if (!idToken) return res.status(400).json({ error: "Invalid Google token" });
 
       const ticket = await client.verifyIdToken({
@@ -281,10 +350,9 @@ async function startServer() {
 
       const token = jwt.sign({ uid: user.uid, role: user.role }, JWT_SECRET);
       res.json({ token, user });
-    } catch (error: any) {
+    } catch (error) {
       console.error("Google Auth Error:", error);
-      const message = error?.message || "Google authentication failed";
-      res.status(400).json({ error: message });
+      res.status(500).json({ error: "Google authentication failed" });
     }
   });
 
@@ -626,21 +694,32 @@ async function startServer() {
     }
   });
 
-  app.post("/api/products", authenticate, async (req: any, res) => {
+  app.post("/api/products", authenticate, handleUpload, async (req: any, res) => {
     try {
-      await runUpload(upload.array("images", 5), req, res);
       console.log("Creating product with data:", req.body);
       console.log("Uploaded files:", req.files);
 
-      const imageUrls = ((req.files as any[]) || [])
-        .map((file) => toUploadedFileUrl(req, file))
-        .filter(Boolean);
+      if (!req.body.title || !req.body.description || !req.body.price || !req.body.category || !req.body.condition || !req.body.location) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      const price = Number(req.body.price);
+      if (isNaN(price)) {
+        return res.status(400).json({ error: "Invalid price format" });
+      }
+
+      const imageUrls = (req.files as any[] || []).map(file => {
+        if (file.path && (file.path.startsWith('http') || file.path.startsWith('https'))) {
+          return file.path;
+        }
+        return `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+      });
 
       const productData = {
         ...req.body,
-        price: Number(req.body.price), // Ensure price is a number
+        price,
         images: imageUrls,
-        imageUrl: imageUrls[0], // Keep for backward compatibility
+        imageUrl: imageUrls[0] || "",
         sellerId: req.user.uid
       };
       const product = new Product(productData);
@@ -649,14 +728,12 @@ async function startServer() {
       res.status(201).json(product);
     } catch (error) {
       console.error("Error creating product:", error);
-      const details = error instanceof Error ? error.message : String(error);
-      res.status(500).json({ error: `Failed to create product: ${details}` });
+      res.status(500).json({ error: "Failed to create product", details: error instanceof Error ? error.message : String(error) });
     }
   });
 
-  app.patch("/api/products/:id", authenticate, async (req: any, res) => {
+  app.patch("/api/products/:id", authenticate, handleUpload, async (req: any, res) => {
     try {
-      await runUpload(upload.array("images", 5), req, res);
       const product = await Product.findById(req.params.id);
       if (!product) return res.status(404).json({ error: "Product not found" });
       
@@ -665,12 +742,21 @@ async function startServer() {
       }
 
       const updateData = { ...req.body };
-      if (updateData.price) updateData.price = Number(updateData.price);
+      if (updateData.price) {
+        const price = Number(updateData.price);
+        if (isNaN(price)) {
+          return res.status(400).json({ error: "Invalid price format" });
+        }
+        updateData.price = price;
+      }
 
       if (req.files && (req.files as any[]).length > 0) {
-        const imageUrls = (req.files as any[])
-          .map((file) => toUploadedFileUrl(req, file))
-          .filter(Boolean);
+        const imageUrls = (req.files as any[]).map(file => {
+          if (file.path && (file.path.startsWith('http') || file.path.startsWith('https'))) {
+            return file.path;
+          }
+          return `${req.protocol}://${req.get("host")}/uploads/${file.filename}`;
+        });
         updateData.images = imageUrls;
         updateData.imageUrl = imageUrls[0];
       }
@@ -686,8 +772,7 @@ async function startServer() {
       res.json(updatedProduct);
     } catch (error) {
       console.error("Error updating product:", error);
-      const details = error instanceof Error ? error.message : String(error);
-      res.status(500).json({ error: `Failed to update product: ${details}` });
+      res.status(500).json({ error: "Failed to update product" });
     }
   });
 
@@ -742,26 +827,18 @@ async function startServer() {
   });
 
   // Upload
-  app.post("/api/upload", async (req, res) => {
-    try {
-      await runUpload(upload.single("file"), req, res);
-      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-      const url = toUploadedFileUrl(req, req.file);
-      res.json({ url });
-    } catch (error) {
-      console.error("Error uploading file:", error);
-      const details = error instanceof Error ? error.message : String(error);
-      res.status(500).json({ error: `Failed to upload file: ${details}` });
-    }
+  app.post("/api/upload", handleSingleUpload, (req: any, res) => {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    const url = isCloudinaryConfigured 
+      ? req.file.path 
+      : `${req.protocol}://${req.get("host")}/uploads/${req.file.filename}`;
+    res.json({ url });
   });
 
   // Chats
   app.get("/api/chats", async (req, res) => {
     try {
       const { userId } = req.query;
-      if (!userId || typeof userId !== "string") {
-        return res.status(400).json({ error: "Missing required query parameter: userId" });
-      }
       const chats = await Chat.find({ participants: userId }).sort({ lastMessageAt: -1 });
       res.json(chats);
     } catch (error) {
@@ -770,57 +847,30 @@ async function startServer() {
   });
 
   app.post("/api/chats", async (req, res) => {
-  try {
-    const {
-      productId,
-      buyerId,
-      buyerName,
-      sellerId,
-      sellerName,
-      productTitle,
-      productImageUrl,
-    } = req.body;
-
-    if (!productId || !buyerId || !sellerId || !productTitle) {
-      return res.status(400).json({ error: "Missing required chat fields" });
+    try {
+      const { productId, buyerId, buyerName, sellerId, sellerName, productTitle, productImageUrl } = req.body;
+      let chat = await Chat.findOne({ productId, buyerId });
+      if (!chat) {
+        chat = new Chat({
+          productId,
+          buyerId,
+          buyerName,
+          sellerId,
+          sellerName,
+          productTitle,
+          productImageUrl,
+          participants: [buyerId, sellerId],
+        });
+        await chat.save();
+      }
+      res.json(chat);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to start chat" });
     }
-
-    // ✅ FIX: check both buyer + seller + product
-    let chat = await Chat.findOne({
-      productId,
-      buyerId,
-      sellerId,
-    });
-
-    if (!chat) {
-      chat = new Chat({
-        productId,
-        buyerId,
-        buyerName,
-        sellerId,
-        sellerName,
-        productTitle,
-        productImageUrl,
-        participants: [buyerId, sellerId], // ✅ IMPORTANT
-        lastMessage: "",
-        lastMessageAt: new Date(),
-      });
-
-      await chat.save();
-    }
-
-    res.json(chat);
-  } catch (error) {
-    console.error("CREATE CHAT ERROR:", error);
-    res.status(500).json({ error: "Failed to start chat" });
-  }
-});
+  });
 
   app.get("/api/chats/:id", async (req, res) => {
     try {
-      if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-        return res.status(400).json({ error: "Invalid chat ID" });
-      }
       const chat = await Chat.findById(req.params.id);
       if (!chat) return res.status(404).json({ error: "Chat not found" });
       res.json(chat);
@@ -830,62 +880,30 @@ async function startServer() {
   });
 
   app.get("/api/chats/:id/messages", async (req, res) => {
-  try {
-    const { id } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid chat ID" });
+    try {
+      const messages = await Message.find({ chatId: req.params.id }).sort({ createdAt: 1 });
+      res.json(messages);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch messages" });
     }
-    const chat = await Chat.findById(id);
-    if (!chat) {
-      return res.status(404).json({ error: "Chat not found" });
-    }
-
-    // ✅ Check valid Mongo ID
-    if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ error: "Invalid chat ID" });
-    }
-
-    // ✅ Convert to ObjectId
-    const messages = await Message.find({
-      chatId: new mongoose.Types.ObjectId(id),
-    }).sort({ createdAt: 1 });
-
-    res.json(messages);
-  } catch (error) {
-    console.error("GET MESSAGES ERROR:", error);
-    res.status(500).json({ error: "Failed to fetch messages" });
-  }
   });
 
   app.post("/api/chats/:id/messages", async (req, res) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: "Invalid chat ID" });
+    try {
+      const message = new Message({
+        chatId: req.params.id,
+        ...req.body,
+      });
+      await message.save();
+      await Chat.findByIdAndUpdate(req.params.id, {
+        lastMessage: message.text,
+        lastMessageAt: message.createdAt,
+      });
+      res.json(message);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to send message" });
     }
-
-    const chat = await Chat.findById(req.params.id);
-    if (!chat) {
-      return res.status(404).json({ error: "Chat not found" });
-    }
-
-    const message = new Message({
-      chatId: new mongoose.Types.ObjectId(req.params.id), // ✅ FIX
-      ...req.body,
-    });
-
-    await message.save();
-
-    await Chat.findByIdAndUpdate(req.params.id, {
-      lastMessage: message.text,
-      lastMessageAt: message.createdAt,
-    });
-
-    res.json(message);
-  } catch (error) {
-    console.error("SEND MESSAGE ERROR:", error);
-    res.status(500).json({ error: "Failed to send message" });
-  }
-});
+  });
 
   // Dashboard APIs
   app.get("/api/dashboard/summary", authenticate, async (req: any, res) => {
@@ -1094,76 +1112,56 @@ async function startServer() {
       const items = await Cart.find({ userId: req.user.uid }).sort({ createdAt: -1 });
       res.json(items);
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch cart" });
+      res.status(500).json({ error: "Failed to fetch your cart" });
     }
   });
 
   app.post("/api/cart", authenticate, async (req: any, res) => {
     try {
-      const { productId } = req.body;
-      if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
-        return res.status(400).json({ error: "Invalid product ID" });
-      }
-
-      const product = await Product.findById(productId);
-      if (!product) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-      if (product.status === "sold") {
-        return res.status(409).json({ error: "This product has already been sold" });
-      }
-      if (product.sellerId === req.user.uid) {
-        return res.status(400).json({ error: "You cannot add your own product to cart" });
-      }
-
-      let cartItem = await Cart.findOne({ userId: req.user.uid, productId });
-      if (!cartItem) {
-        cartItem = new Cart({
+      const { productId, productTitle, productPrice, productImageUrl } = req.body;
+      let item = await Cart.findOne({ userId: req.user.uid, productId });
+      if (item) {
+        item.quantity += 1;
+        await item.save();
+      } else {
+        item = new Cart({
           userId: req.user.uid,
           productId,
-          productTitle: product.title,
-          productPrice: product.price,
-          productImageUrl: product.imageUrl || product.images?.[0] || "",
-          quantity: 1,
+          productTitle,
+          productPrice,
+          productImageUrl,
+          quantity: 1
         });
-        await cartItem.save();
+        await item.save();
       }
-
-      res.status(201).json(cartItem);
-    } catch (error: any) {
-      if (error?.code === 11000) {
-        const existingItem = await Cart.findOne({
-          userId: req.user.uid,
-          productId: req.body.productId,
-        });
-        return res.json(existingItem);
-      }
-      console.error("Cart add error:", error);
-      res.status(500).json({ error: "Failed to add item to cart" });
+      res.json(item);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to add to cart" });
     }
   });
 
   app.patch("/api/cart/:id", authenticate, async (req: any, res) => {
     try {
-      const quantity = Number(req.body.quantity);
-      if (!quantity || quantity < 1) {
-        return res.status(400).json({ error: "Quantity must be at least 1" });
-      }
-
-      const cartItem = await Cart.findOneAndUpdate(
+      const { quantity } = req.body;
+      const item = await Cart.findOneAndUpdate(
         { _id: req.params.id, userId: req.user.uid },
-        { quantity: 1 },
+        { quantity },
         { new: true }
       );
-
-      if (!cartItem) {
-        return res.status(404).json({ error: "Cart item not found" });
-      }
-
-      res.json(cartItem);
+      if (!item) return res.status(404).json({ error: "Cart item not found" });
+      res.json(item);
     } catch (error) {
-      console.error("Cart update error:", error);
-      res.status(500).json({ error: "Failed to update cart" });
+      res.status(500).json({ error: "Failed to update cart item" });
+    }
+  });
+
+  app.delete("/api/cart/:id", authenticate, async (req: any, res) => {
+    try {
+      const item = await Cart.findOneAndDelete({ _id: req.params.id, userId: req.user.uid });
+      if (!item) return res.status(404).json({ error: "Cart item not found" });
+      res.json({ message: "Removed from cart" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove from cart" });
     }
   });
 
@@ -1172,21 +1170,7 @@ async function startServer() {
       await Cart.deleteMany({ userId: req.user.uid });
       res.json({ message: "Cart cleared" });
     } catch (error) {
-      console.error("Cart clear error:", error);
       res.status(500).json({ error: "Failed to clear cart" });
-    }
-  });
-
-  app.delete("/api/cart/:id", authenticate, async (req: any, res) => {
-    try {
-      const cartItem = await Cart.findOneAndDelete({ _id: req.params.id, userId: req.user.uid });
-      if (!cartItem) {
-        return res.status(404).json({ error: "Cart item not found" });
-      }
-      res.json({ message: "Cart item removed" });
-    } catch (error) {
-      console.error("Cart delete error:", error);
-      res.status(500).json({ error: "Failed to remove cart item" });
     }
   });
 
@@ -1259,10 +1243,9 @@ async function startServer() {
         currency: "INR",
         receipt: `cart_receipt_${Date.now()}`,
       });
-
       res.json({ ...order, key: razorpayKeyId });
     } catch (error) {
-      console.error("Error creating cart Razorpay order:", error);
+      console.error("Error creating Razorpay cart order:", error);
       res.status(500).json({ error: "Failed to create cart payment order" });
     }
   });
@@ -1270,15 +1253,6 @@ async function startServer() {
   const moveProductToSold = async (productId: string, buyerId?: string, buyerName?: string) => {
     const product = await Product.findById(productId);
     if (!product) throw new Error("Product not found");
-
-    const existingSoldProduct = await SoldProduct.findOne({ productId: product._id });
-    if (existingSoldProduct) {
-      if (product.status !== "sold") {
-        product.status = "sold";
-        await product.save();
-      }
-      return existingSoldProduct;
-    }
 
     // Create sold product entry
     const soldProduct = new SoldProduct({
@@ -1309,55 +1283,12 @@ async function startServer() {
     return soldProduct;
   };
 
-  const notifySellerOfSale = async (product: any, productId: string) => {
-    try {
-      const notification = new Notification({
-        userId: product.sellerId,
-        type: "system",
-        title: "Product Sold!",
-        message: `Your product "${product.title}" has been sold for Rs.${product.price}.`,
-        link: `/product/${productId}`,
-      });
-      await notification.save();
-      io.emit(`notification_${product.sellerId}`, notification);
-      console.log(`Notification sent to seller ${product.sellerId}`);
-    } catch (error) {
-      console.error("Error sending notification to seller:", error);
-    }
-  };
-
   const processPaymentSuccess = async (productId: string, buyerId: string, paymentDetails: any) => {
     console.log(`Processing payment success for product ${productId}, buyer ${buyerId}`);
     const product = await Product.findById(productId);
     if (!product) {
       console.error(`Product ${productId} not found during payment processing`);
       throw new Error("Product not found");
-    }
-    if (product.sellerId === buyerId) {
-      throw new Error("You cannot buy your own product");
-    }
-
-    const paymentLookup: Record<string, string>[] = [];
-    if (paymentDetails.razorpay_payment_id) {
-      paymentLookup.push({ paymentId: paymentDetails.razorpay_payment_id });
-    }
-    if (paymentDetails.razorpay_order_id) {
-      paymentLookup.push({ orderId: paymentDetails.razorpay_order_id });
-    }
-
-    if (paymentLookup.length > 0) {
-      const existingPayment = await Payment.findOne({ $or: paymentLookup });
-      if (existingPayment) {
-        return {
-          success: true,
-          message: "Payment already processed",
-          paymentId: existingPayment.paymentId,
-        };
-      }
-    }
-
-    if (product.status === "sold") {
-      throw new Error("This product has already been sold");
     }
 
     // Create payment record
@@ -1368,7 +1299,6 @@ async function startServer() {
       productId,
       buyerId,
       amount: product.price,
-      currency: "INR",
       status: "completed"
     });
     
@@ -1405,132 +1335,45 @@ async function startServer() {
     return { success: true, message: "Payment processed successfully", paymentId: payment.paymentId };
   };
 
-  const processCartPaymentSuccess = async (
-    productIds: string[],
-    buyerId: string,
-    paymentDetails: any
-  ) => {
-    const uniqueProductIds = [...new Set(productIds)];
-    if (uniqueProductIds.length === 0) {
-      throw new Error("Cart is empty");
-    }
-
-    const paymentLookup: Record<string, string>[] = [];
-    if (paymentDetails.razorpay_payment_id) {
-      paymentLookup.push({ paymentId: paymentDetails.razorpay_payment_id });
-    }
-    if (paymentDetails.razorpay_order_id) {
-      paymentLookup.push({ orderId: paymentDetails.razorpay_order_id });
-    }
-
-    if (paymentLookup.length > 0) {
-      const existingPayment = await Payment.findOne({ $or: paymentLookup });
-      if (existingPayment) {
-        return {
-          success: true,
-          message: "Payment already processed",
-          paymentId: existingPayment.paymentId,
-        };
-      }
-    }
-
-    const buyer = await User.findOne({ uid: buyerId });
-    const cartItems = await Cart.find({
-      userId: buyerId,
-      productId: { $in: uniqueProductIds },
-    });
-
-    if (cartItems.length === 0) {
-      throw new Error("Cart is empty");
-    }
-
-    const products = await Product.find({
-      _id: { $in: uniqueProductIds.map((id) => new mongoose.Types.ObjectId(id)) },
-    });
-
-    if (products.length !== uniqueProductIds.length) {
-      throw new Error("One or more cart products no longer exist");
-    }
-
-    for (const product of products) {
-      if (product.sellerId === buyerId) {
-        throw new Error("You cannot buy your own product");
-      }
-      if (product.status === "sold") {
-        throw new Error(`"${product.title}" has already been sold`);
-      }
-    }
-
-    for (const product of products) {
-      const payment = new Payment({
-        orderId: paymentDetails.razorpay_order_id || `sim_${Date.now()}`,
-        paymentId: paymentDetails.razorpay_payment_id || `sim_pay_${Date.now()}`,
-        signature: paymentDetails.razorpay_signature || "simulated",
-        productId: product._id,
-        buyerId,
-        amount: product.price,
-        currency: "INR",
-        status: "completed",
-      });
-
-      await payment.save();
-      await moveProductToSold(String(product._id), buyerId, buyer?.name);
-      await notifySellerOfSale(product, String(product._id));
-    }
-
-    await Cart.deleteMany({ userId: buyerId });
-
-    return {
-      success: true,
-      message: "Cart payment processed successfully",
-      paymentId: paymentDetails.razorpay_payment_id || `sim_pay_${Date.now()}`,
-      processedProducts: products.length,
-    };
-  };
-
   const verifyPaymentHandler = async (req: any, res: express.Response) => {
     try {
       console.log("Received payment verification request:", req.body);
-      const {
-        razorpay_order_id,
-        razorpay_payment_id,
-        razorpay_signature,
-        productId,
-        productIds,
-        simulation,
-      } = req.body;
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, productId, productIds, simulation } = req.body;
       const buyerId = req.user.uid;
-      const cartProductIds = Array.isArray(productIds)
-        ? productIds.filter((id: unknown): id is string => typeof id === "string")
-        : [];
 
-      if (!productId && cartProductIds.length === 0) {
+      if (!productId && (!productIds || productIds.length === 0)) {
         return res.status(400).json({ error: "Missing required field: productId or productIds" });
-      }
-      if (productId && !mongoose.Types.ObjectId.isValid(productId)) {
-        return res.status(400).json({ error: "Invalid product ID" });
-      }
-      if (cartProductIds.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
-        return res.status(400).json({ error: "One or more cart product IDs are invalid" });
       }
 
       // Allow simulation in test mode or if explicitly requested
       const isTestMode = (process.env.RAZORPAY_KEY_ID || "").startsWith("rzp_test_");
       
+      const paymentDetails = {
+        razorpay_order_id: razorpay_order_id || `test_order_${Date.now()}`,
+        razorpay_payment_id: razorpay_payment_id || `test_pay_${Date.now()}`,
+        razorpay_signature: razorpay_signature || "test_signature"
+      };
+
       if (simulation === true || (isTestMode && !razorpay_signature)) {
-        console.log("Processing simulated/test payment:", {
-          productId,
-          productIds: cartProductIds,
-        });
-        const simulatedDetails = {
-          razorpay_order_id: razorpay_order_id || `test_order_${Date.now()}`,
-          razorpay_payment_id: razorpay_payment_id || `test_pay_${Date.now()}`,
-          razorpay_signature: razorpay_signature || "test_signature"
-        };
-        const result = cartProductIds.length > 0
-          ? await processCartPaymentSuccess(cartProductIds, buyerId, simulatedDetails)
-          : await processPaymentSuccess(productId, buyerId, simulatedDetails);
-        return res.json(result);
+        console.log("Processing simulated/test payment for products:", productId || productIds);
+        
+        if (productIds && productIds.length > 0) {
+          const results = [];
+          for (const id of productIds) {
+            try {
+              const result = await processPaymentSuccess(id, buyerId, paymentDetails);
+              results.push(result);
+            } catch (err) {
+              console.error(`Error processing payment for product ${id}:`, err);
+            }
+          }
+          // Clear cart
+          await Cart.deleteMany({ userId: buyerId });
+          return res.json({ success: true, results });
+        } else {
+          const result = await processPaymentSuccess(productId, buyerId, paymentDetails);
+          return res.json(result);
+        }
       }
 
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
@@ -1546,35 +1389,38 @@ async function startServer() {
       console.log("Signature verification:", { expected: expectedSignature, received: razorpay_signature });
 
       if (expectedSignature === razorpay_signature) {
-        const verifiedDetails = {
-          razorpay_order_id,
-          razorpay_payment_id,
-          razorpay_signature
-        };
-        const result = cartProductIds.length > 0
-          ? await processCartPaymentSuccess(cartProductIds, buyerId, verifiedDetails)
-          : await processPaymentSuccess(productId, buyerId, verifiedDetails);
-        res.json(result);
+        if (productIds && productIds.length > 0) {
+          const results = [];
+          for (const id of productIds) {
+            try {
+              const result = await processPaymentSuccess(id, buyerId, {
+                razorpay_order_id,
+                razorpay_payment_id,
+                razorpay_signature
+              });
+              results.push(result);
+            } catch (err) {
+              console.error(`Error processing payment for product ${id}:`, err);
+            }
+          }
+          // Clear cart
+          await Cart.deleteMany({ userId: buyerId });
+          return res.json({ success: true, results });
+        } else {
+          const result = await processPaymentSuccess(productId, buyerId, {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature
+          });
+          res.json(result);
+        }
       } else {
         console.error("Invalid Razorpay signature");
         res.status(400).json({ error: "Invalid signature" });
       }
     } catch (error) {
       console.error("Error verifying payment:", error);
-      const message = error instanceof Error ? error.message : String(error);
-      if (message === "Cart is empty") {
-        return res.status(400).json({ error: message });
-      }
-      if (message === "One or more cart products no longer exist") {
-        return res.status(404).json({ error: message });
-      }
-      if (message === "This product has already been sold" || message.includes("has already been sold")) {
-        return res.status(409).json({ error: message });
-      }
-      if (message === "You cannot buy your own product") {
-        return res.status(400).json({ error: message });
-      }
-      res.status(500).json({ error: "Payment verification failed", details: message });
+      res.status(500).json({ error: "Payment verification failed", details: error instanceof Error ? error.message : String(error) });
     }
   };
 
@@ -1623,9 +1469,32 @@ async function startServer() {
     next(err);
   });
 
-  const distPath = path.resolve(__dirname, "../frontend/dist");
-app.use(express.static(distPath));
-
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      console.log("Initializing Vite middleware...");
+      const vite = await createViteServer({
+        server: { 
+          middlewareMode: true,
+          hmr: false,
+          watch: null,
+        },
+        appType: "spa",
+        root: path.resolve(__dirname, "../frontend"),
+      });
+      app.use(vite.middlewares);
+      console.log("Vite middleware attached");
+    } catch (viteError) {
+      console.error("Vite failed to start:", viteError);
+    }
+  } else {
+    // Serve static files in production
+    const distPath = path.resolve(__dirname, "../frontend/dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.resolve(distPath, "index.html"));
+    });
+  }
 
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
