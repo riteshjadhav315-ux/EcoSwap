@@ -313,12 +313,19 @@ async function startServer() {
 
   app.post("/api/auth/google", async (req, res) => {
     try {
-      const { code } = req.body;
-      const { tokens } = await client.getToken({
-        code,
-        redirect_uri: "postmessage",
-      });
-      const idToken = tokens.id_token;
+      const { code, credential } = req.body;
+      let idToken: string | undefined;
+
+      if (credential) {
+        idToken = credential;
+      } else if (code) {
+        const { tokens } = await client.getToken({
+          code,
+          redirect_uri: "postmessage",
+        });
+        idToken = tokens.id_token || undefined;
+      }
+
       if (!idToken) return res.status(400).json({ error: "Invalid Google token" });
 
       const ticket = await client.verifyIdToken({
