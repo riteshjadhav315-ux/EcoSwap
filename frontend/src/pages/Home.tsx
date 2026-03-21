@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { getAllProducts, searchProducts } from '../services/productService';
+import { Link } from 'react-router-dom';
+import { getAllProducts, getFilteredProducts, searchProducts } from '../services/productService';
 import { Product } from '../types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Filter, Recycle, ShieldCheck, Zap, Leaf, ArrowRight, Heart, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Filter, Recycle, ShieldCheck, Zap, Leaf, ArrowRight, Heart, ShoppingCart, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSearch } from '../context/SearchContext';
 import { useCart } from '../context/CartContext';
 import { addToWishlist, removeFromWishlist, isInWishlist } from '../services/wishlistService';
+import { useNavigate } from 'react-router-dom';
 
 const Home = () => {
   const { user } = useAuth();
@@ -38,35 +39,31 @@ const Home = () => {
           category: selectedCategory,
           minPrice: minPrice ? Number(minPrice) : undefined,
           maxPrice: maxPrice ? Number(maxPrice) : undefined,
-          location: selectedLocation !== "All Locations" ? selectedLocation : undefined,
+          location: selectedLocation !== "All Locations" ? selectedLocation : undefined
         };
 
         if (searchQuery) {
           data = await searchProducts(searchQuery, filters);
-        } else if (selectedCategory !== "All" || minPrice || maxPrice || selectedLocation !== "All Locations") {
+        } else if (selectedCategory !== "All" || minPrice || maxPrice || (selectedLocation !== "All Locations")) {
+          // Use search endpoint even without query if filters are present
           data = await searchProducts("", filters);
         } else {
           data = await getAllProducts();
         }
-
+        
         setProducts(data);
-
+        
         if (user) {
-          const wishlistPromises = data.map(async (product) => {
-            const wishId = await isInWishlist(user.uid, product.id);
-            return { productId: product.id, wishId };
+          const wishlistPromises = data.map(async (p: Product) => {
+            const wishId = await isInWishlist(user.uid, p.id);
+            return { productId: p.id, wishId };
           });
-
           const results = await Promise.all(wishlistPromises);
           const map: Record<string, string> = {};
-          results.forEach((result) => {
-            if (result.wishId) {
-              map[result.productId] = result.wishId;
-            }
+          results.forEach(res => {
+            if (res.wishId) map[res.productId] = res.wishId;
           });
           setWishlistMap(map);
-        } else {
-          setWishlistMap({});
         }
       } catch (error) {
         console.error("Failed to fetch products:", error);
@@ -94,39 +91,30 @@ const Home = () => {
   };
 
   const getPageNumbers = () => {
-    const pages: Array<number | string> = [];
+    const pages = [];
     const maxVisiblePages = 5;
-
+    
     if (totalPages <= maxVisiblePages) {
-      for (let i = 1; i <= totalPages; i += 1) {
-        pages.push(i);
-      }
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
       pages.push(1);
-      if (currentPage > 3) {
-        pages.push('...');
-      }
-
+      if (currentPage > 3) pages.push('...');
+      
       const start = Math.max(2, currentPage - 1);
       const end = Math.min(totalPages - 1, currentPage + 1);
-
-      for (let i = start; i <= end; i += 1) {
-        pages.push(i);
-      }
-
-      if (currentPage < totalPages - 2) {
-        pages.push('...');
-      }
+      
+      for (let i = start; i <= end; i++) pages.push(i);
+      
+      if (currentPage < totalPages - 2) pages.push('...');
       pages.push(totalPages);
     }
-
     return pages;
   };
 
   const toggleWishlist = async (e: React.MouseEvent, product: Product) => {
     e.preventDefault();
     e.stopPropagation();
-
+    
     if (!user) {
       navigate('/auth');
       return;
@@ -136,7 +124,7 @@ const Home = () => {
     try {
       if (wishId) {
         await removeFromWishlist(wishId);
-        setWishlistMap((prev) => {
+        setWishlistMap(prev => {
           const next = { ...prev };
           delete next[product.id];
           return next;
@@ -147,9 +135,9 @@ const Home = () => {
           productId: product.id,
           productTitle: product.title,
           productPrice: product.price,
-          productImageUrl: product.imageUrl || product.images?.[0] || "",
+          productImageUrl: product.imageUrl || (product.images && product.images[0]) || ""
         });
-        setWishlistMap((prev) => ({ ...prev, [product.id]: newWishId }));
+        setWishlistMap(prev => ({ ...prev, [product.id]: newWishId }));
       }
     } catch (err) {
       console.error("Wishlist toggle error:", err);
@@ -158,9 +146,11 @@ const Home = () => {
 
   return (
     <div className="bg-stone-50">
+      {/* Hero Section */}
       <section className="relative bg-[#E9F5F1] overflow-hidden pt-2 lg:pt-4 pb-12 lg:pb-16">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-12 items-center">
-          <motion.div
+          {/* Left Content */}
+          <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
@@ -177,16 +167,16 @@ const Home = () => {
             <p className="text-base lg:text-lg xl:text-xl text-emerald-900/60 mb-6 lg:mb-8 max-w-lg leading-relaxed font-medium">
               Join thousands of people swapping, selling, and buying pre-loved goods. Reduce waste and save money with EcoSwap.
             </p>
-
+            
             <div className="grid grid-cols-2 sm:flex sm:flex-row items-center gap-3 sm:gap-4 mb-6 lg:mb-8">
-              <Link
-                to="/sell"
+              <Link 
+                to="/sell" 
                 className="flex-1 sm:flex-none px-4 sm:px-8 py-3.5 sm:py-4 bg-[#059669] text-white rounded-xl sm:rounded-2xl font-black hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200/50 flex items-center justify-center gap-2 group text-xs sm:text-base"
               >
                 Start Selling
                 <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
-              <button
+              <button 
                 onClick={() => document.getElementById('marketplace')?.scrollIntoView({ behavior: 'smooth' })}
                 className="flex-1 sm:flex-none px-4 sm:px-8 py-3.5 sm:py-4 bg-white text-emerald-900 border border-emerald-100 rounded-xl sm:rounded-2xl font-black hover:bg-emerald-50 transition-all shadow-sm text-xs sm:text-base"
               >
@@ -216,23 +206,25 @@ const Home = () => {
             </div>
           </motion.div>
 
-          <motion.div
+          {/* Right Content: Image and Stats */}
+          <motion.div 
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.8, delay: 0.2 }}
             className="relative mt-8 lg:mt-0"
           >
             <div className="relative rounded-[2.5rem] lg:rounded-[4rem] overflow-hidden shadow-[0_32px_64px_-16px_rgba(5,150,105,0.2)] border-4 lg:border-[12px] border-white group">
-              <img
-                src="https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&q=80&w=1200"
-                alt="Eco-Friendly Electronics Marketplace"
+              <img 
+                src="https://images.unsplash.com/photo-1550009158-9ebf69173e03?auto=format&fit=crop&q=80&w=1200" 
+                alt="Eco-Friendly Electronics Marketplace" 
                 className="w-full h-[300px] sm:h-[400px] lg:h-[480px] xl:h-[520px] object-cover transition-transform duration-700 group-hover:scale-105"
                 referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-tr from-emerald-900/10 to-transparent pointer-events-none" />
             </div>
 
-            <motion.div
+            {/* Floating Stats Card */}
+            <motion.div 
               initial={{ x: 50, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 0.8, type: "spring" }}
@@ -250,14 +242,15 @@ const Home = () => {
         </div>
       </section>
 
+      {/* Main Content: Products */}
       <div id="marketplace" className="max-w-7xl mx-auto px-4 py-12 lg:py-20">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
           <div>
             <h2 className="text-2xl lg:text-3xl font-black text-emerald-950 mb-2">
-              {searchQuery
-                ? `Search Results for "${searchQuery}"${selectedLocation !== "All Locations" ? ` in ${selectedLocation}` : ""}`
-                : selectedCategory !== "All"
-                  ? `${selectedCategory} Items${selectedLocation !== "All Locations" ? ` in ${selectedLocation}` : ""}`
+              {searchQuery 
+                ? `Search Results for "${searchQuery}"${selectedLocation !== "All Locations" ? ` in ${selectedLocation}` : ""}` 
+                : selectedCategory !== "All" 
+                  ? `${selectedCategory} Items${selectedLocation !== "All Locations" ? ` in ${selectedLocation}` : ""}` 
                   : selectedLocation !== "All Locations"
                     ? `Items in ${selectedLocation}`
                     : "Featured Items"}
@@ -266,7 +259,7 @@ const Home = () => {
               {products.length} {products.length === 1 ? 'result' : 'results'} found.
             </p>
           </div>
-          <button
+          <button 
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center justify-center gap-2 px-6 py-3 border rounded-2xl transition-all shadow-sm font-bold text-sm ${showFilters ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white border-emerald-100 text-emerald-600 hover:bg-emerald-50'}`}
           >
@@ -276,7 +269,7 @@ const Home = () => {
         </div>
 
         {showFilters && (
-          <motion.div
+          <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-white p-6 rounded-[2rem] border border-emerald-100 shadow-sm mb-12 grid grid-cols-1 md:grid-cols-3 gap-6"
@@ -284,17 +277,17 @@ const Home = () => {
             <div>
               <label className="block text-xs font-black text-emerald-900 uppercase tracking-widest mb-2">Price Range</label>
               <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  placeholder="Min"
+                <input 
+                  type="number" 
+                  placeholder="Min" 
                   value={minPrice}
                   onChange={(e) => setMinPrice(e.target.value)}
                   className="w-full px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
                 <span className="text-emerald-300">-</span>
-                <input
-                  type="number"
-                  placeholder="Max"
+                <input 
+                  type="number" 
+                  placeholder="Max" 
                   value={maxPrice}
                   onChange={(e) => setMaxPrice(e.target.value)}
                   className="w-full px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -303,16 +296,16 @@ const Home = () => {
             </div>
             <div>
               <label className="block text-xs font-black text-emerald-900 uppercase tracking-widest mb-2">Location</label>
-              <input
-                type="text"
-                placeholder="Search by city..."
+              <input 
+                type="text" 
+                placeholder="Search by city..." 
                 value={selectedLocation === "All Locations" ? "" : selectedLocation}
                 onChange={(e) => setSelectedLocation(e.target.value || "All Locations")}
                 className="w-full px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
             <div className="flex items-end">
-              <button
+              <button 
                 onClick={() => {
                   setMinPrice("");
                   setMaxPrice("");
@@ -330,9 +323,9 @@ const Home = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
             {[...Array(8)].map((_, i) => (
               <div key={i} className="animate-pulse">
-                <div className="bg-stone-200 aspect-square rounded-[2rem] mb-4" />
-                <div className="h-4 bg-stone-200 rounded w-3/4 mb-2" />
-                <div className="h-4 bg-stone-200 rounded w-1/2" />
+                <div className="bg-stone-200 aspect-square rounded-[2rem] mb-4"></div>
+                <div className="h-4 bg-stone-200 rounded w-3/4 mb-2"></div>
+                <div className="h-4 bg-stone-200 rounded w-1/2"></div>
               </div>
             ))}
           </div>
@@ -340,71 +333,47 @@ const Home = () => {
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
               {paginatedProducts.map((product) => (
-                <motion.div
-                  key={product.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="group"
-                >
-                  <Link to={`/product/${product.id}`}>
-                    <div className="relative aspect-square overflow-hidden rounded-[2rem] bg-white mb-4 border border-emerald-50 shadow-sm group-hover:shadow-xl group-hover:shadow-emerald-100/50 transition-all duration-500">
-                      <img
-                        src={product.imageUrl || product.images?.[0] || 'https://picsum.photos/seed/product/400/400'}
-                        alt={product.title}
-                        className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-700"
-                        referrerPolicy="no-referrer"
-                      />
-                      <div className="absolute top-4 right-4 flex flex-col gap-2">
-                        <div className="bg-white/90 backdrop-blur-sm px-4 py-1.5 rounded-2xl text-sm font-black text-emerald-700 shadow-sm border border-white">
-                          Rs. {product.price}
-                        </div>
-                        <button
-                          onClick={(e) => toggleWishlist(e, product)}
-                          className={`p-2.5 rounded-xl backdrop-blur-md transition-all shadow-lg border border-white/50 ${
-                            wishlistMap[product.id]
-                              ? 'bg-red-500 text-white'
-                              : 'bg-white/80 text-emerald-600 hover:bg-white hover:scale-110'
-                          }`}
-                        >
-                          <Heart className={`w-4 h-4 ${wishlistMap[product.id] ? 'fill-current' : ''}`} />
-                        </button>
-                        <button
-                          onClick={async (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (!user) {
-                              navigate('/auth');
-                              return;
-                            }
+              <motion.div
+                key={product.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="group"
+              >
+                <Link to={`/product/${product.id}`}>
+                  <div className="relative aspect-square overflow-hidden rounded-[2rem] bg-white mb-4 border border-emerald-50 shadow-sm group-hover:shadow-xl group-hover:shadow-emerald-100/50 transition-all duration-500">
+                    <img
+                      src={product.imageUrl || (product.images && product.images[0]) || 'https://picsum.photos/seed/product/400/400'}
+                      alt={product.title}
+                      className="object-cover w-full h-full group-hover:scale-110 transition-transform duration-700"
+                      referrerPolicy="no-referrer"
+                    />
+                    {/* Wishlist Button - Top Right */}
+                    <button
+                      onClick={(e) => toggleWishlist(e, product)}
+                      className={`absolute top-3 right-3 p-2 rounded-full backdrop-blur-md transition-all shadow-sm border border-white/50 z-10 ${
+                        wishlistMap[product.id] 
+                          ? 'bg-red-500 text-white' 
+                          : 'bg-white/70 text-emerald-600 hover:bg-white hover:scale-110'
+                      }`}
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${wishlistMap[product.id] ? 'fill-current' : ''}`} />
+                    </button>
 
-                            try {
-                              await addToCart(product);
-                              setToastMessage(`${product.title} added to cart!`);
-                              setShowToast(true);
-                              setTimeout(() => setShowToast(false), 3000);
-                            } catch (cartError) {
-                              console.error("Failed to add to cart:", cartError);
-                              setToastMessage("Failed to add item to cart.");
-                              setShowToast(true);
-                              setTimeout(() => setShowToast(false), 3000);
-                            }
-                          }}
-                          className="p-2.5 rounded-xl bg-white/80 backdrop-blur-md text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-lg border border-white/50 hover:scale-110"
-                          title="Add to Cart"
-                        >
-                          <ShoppingCart className="w-4 h-4" />
-                        </button>
-                      </div>
+                    {/* Price - Bottom Left */}
+                    <div className="absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-xl text-sm font-bold text-emerald-900 shadow-sm border border-white/50 z-10">
+                      ₹{product.price}
                     </div>
-                    <h3 className="font-bold text-emerald-950 group-hover:text-emerald-600 transition-colors truncate text-lg">
-                      {product.title}
-                    </h3>
-                    <p className="text-sm text-emerald-800/50 font-medium capitalize">{product.category} | {product.condition}</p>
-                  </Link>
-                </motion.div>
+                  </div>
+                  <h3 className="font-bold text-emerald-950 group-hover:text-emerald-600 transition-colors truncate text-lg">
+                    {product.title}
+                  </h3>
+                  <p className="text-sm text-emerald-800/50 font-medium capitalize">{product.category} • {product.condition}</p>
+                </Link>
+              </motion.div>
               ))}
             </div>
 
+            {/* Pagination */}
             {!loading && totalPages > 1 && (
               <div className="mt-16 flex flex-col items-center gap-6">
                 <div className="flex items-center gap-2">
@@ -425,8 +394,8 @@ const Home = () => {
                           page === currentPage
                             ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-200'
                             : page === '...'
-                              ? 'text-emerald-300 cursor-default'
-                              : 'text-emerald-600 hover:bg-emerald-50 border border-emerald-100'
+                            ? 'text-emerald-300 cursor-default'
+                            : 'text-emerald-600 hover:bg-emerald-50 border border-emerald-100'
                         }`}
                       >
                         {page}
@@ -465,6 +434,7 @@ const Home = () => {
         )}
       </div>
 
+      {/* Toast Notification */}
       <AnimatePresence>
         {showToast && (
           <motion.div
