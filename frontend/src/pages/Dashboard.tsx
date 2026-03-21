@@ -1,382 +1,707 @@
-import React, { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import {
-  Bell,
-  ChevronRight,
-  Heart,
-  LayoutDashboard,
-  Loader2,
-  MessageCircle,
-  Package,
-  ShoppingBag,
-  Star,
-} from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import {
-  getDashboardSummary,
-  getMyNotifications,
-  getMyPurchases,
-  getMyReviews,
-  getMyWishlist,
+import { useNavigate, Link } from "react-router-dom";
+import { 
+  LayoutDashboard, 
+  Package, 
+  ShoppingBag, 
+  Heart, 
+  MessageSquare, 
+  Bell, 
+  Star, 
+  Settings, 
+  LogOut,
+  TrendingUp,
+  CheckCircle2,
+  Clock,
+  ArrowRight,
+  Trash2,
+  Edit,
+  ExternalLink,
+  Loader2,
+  AlertCircle
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  getDashboardSummary, 
+  getMyPurchases, 
+  getMyWishlist, 
+  getMyReviews, 
+  getMyNotifications 
 } from "../services/dashboardService";
+import { getUserProducts, deleteProduct, updateProductStatus, getSoldProducts } from "../services/productService";
+import { Product } from "../types";
 
-type DashboardTab =
-  | "overview"
-  | "purchases"
-  | "wishlist"
-  | "notifications"
-  | "reviews";
-
-type DashboardSummary = {
-  totalProducts: number;
-  totalSold: number;
-  totalPurchases: number;
-  totalWishlist: number;
-  totalChats: number;
-  totalNotifications: number;
-};
+type Tab = "overview" | "products" | "sold" | "purchases" | "wishlist" | "reviews" | "notifications";
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-  const [activeTab, setActiveTab] = useState<DashboardTab>("overview");
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [purchases, setPurchases] = useState<any[]>([]);
-  const [wishlist, setWishlist] = useState<any[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [reviews, setReviews] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>("overview");
   const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<any>(null);
+  const [data, setData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
-      const redirect = encodeURIComponent(`/dashboard${location.search}`);
-      navigate(`/auth?redirect=${redirect}`);
-      return;
+      navigate("/auth?redirect=/dashboard");
     }
-
-    if (user.role === "admin") {
-      navigate("/admin");
-    }
-  }, [location.search, navigate, user]);
+  }, [user, navigate]);
 
   useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const tab = params.get("tab");
-
-    if (
-      tab === "overview" ||
-      tab === "purchases" ||
-      tab === "wishlist" ||
-      tab === "notifications" ||
-      tab === "reviews"
-    ) {
-      setActiveTab(tab);
-      return;
+    if (user) {
+      fetchSummary();
     }
-
-    setActiveTab("overview");
-  }, [location.search]);
-
-  useEffect(() => {
-    if (!user || user.role === "admin") {
-      return;
-    }
-
-    const fetchDashboard = async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const [summaryData, purchasesData, wishlistData, notificationsData, reviewsData] =
-          await Promise.all([
-            getDashboardSummary(),
-            getMyPurchases(),
-            getMyWishlist(),
-            getMyNotifications(),
-            getMyReviews(),
-          ]);
-
-        setSummary(summaryData);
-        setPurchases(Array.isArray(purchasesData) ? purchasesData : []);
-        setWishlist(Array.isArray(wishlistData) ? wishlistData : []);
-        setNotifications(Array.isArray(notificationsData) ? notificationsData : []);
-        setReviews(Array.isArray(reviewsData) ? reviewsData : []);
-      } catch (err) {
-        console.error("Error fetching dashboard data:", err);
-        setError(err instanceof Error ? err.message : "Failed to load dashboard");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchDashboard();
   }, [user]);
 
-  const switchTab = (tab: DashboardTab) => {
-    navigate(`/dashboard?tab=${tab}`);
+  useEffect(() => {
+    if (user) {
+      fetchTabData();
+    }
+  }, [activeTab, user]);
+
+  const fetchSummary = async () => {
+    try {
+      const res = await getDashboardSummary();
+      setSummary(res);
+    } catch (err) {
+      console.error("Error fetching summary:", err);
+    }
   };
 
-  const stats = [
-    { label: "My Listings", value: summary?.totalProducts ?? 0, icon: Package },
-    { label: "Purchases", value: summary?.totalPurchases ?? 0, icon: ShoppingBag },
-    { label: "Wishlist", value: summary?.totalWishlist ?? 0, icon: Heart },
-    { label: "Unread Alerts", value: summary?.totalNotifications ?? 0, icon: Bell },
+  const fetchTabData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      let res;
+      switch (activeTab) {
+        case "overview":
+          res = await getDashboardSummary();
+          setSummary(res);
+          break;
+        case "products":
+          res = await getUserProducts();
+          break;
+        case "sold":
+          res = await getSoldProducts();
+          break;
+        case "purchases":
+          res = await getMyPurchases();
+          break;
+        case "wishlist":
+          res = await getMyWishlist();
+          break;
+        case "reviews":
+          res = await getMyReviews();
+          break;
+        case "notifications":
+          res = await getMyNotifications();
+          break;
+      }
+      setData(res);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!window.confirm("Are you sure you want to delete this listing?")) return;
+    try {
+      await deleteProduct(id);
+      setData((prev: Product[] | null) => prev ? prev.filter(p => p.id !== id) : []);
+      fetchSummary();
+    } catch (err) {
+      alert("Failed to delete product");
+    }
+  };
+
+  const handleMarkAsSold = async (id: string) => {
+    try {
+      await updateProductStatus(id, "sold");
+      setData((prev: Product[]) => prev.map(p => p.id === id ? { ...p, status: "sold" } : p));
+      fetchSummary();
+    } catch (err) {
+      alert("Failed to update status");
+    }
+  };
+
+  if (!user) return null;
+
+  const sidebarItems = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "products", label: "My Products", icon: Package },
+    { id: "sold", label: "Sold Items", icon: CheckCircle2 },
+    { id: "purchases", label: "My Purchases", icon: ShoppingBag },
+    { id: "wishlist", label: "Wishlist", icon: Heart },
+    { id: "reviews", label: "My Reviews", icon: Star },
+    { id: "notifications", label: "Notifications", icon: Bell },
   ];
 
-  if (!user || user.role === "admin") {
-    return null;
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-emerald-50/30 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4 text-emerald-700">
-          <Loader2 className="w-10 h-10 animate-spin" />
-          <p className="font-bold">Loading your dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-emerald-50/30 py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-        <div className="bg-white rounded-[2.5rem] border border-emerald-100 shadow-xl shadow-emerald-100 p-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.3em] text-emerald-400 mb-3">
-                Personal Dashboard
-              </p>
-              <h1 className="text-3xl sm:text-4xl font-black text-emerald-950">
-                Welcome back, {user.name || "EcoSwapper"}
-              </h1>
-              <p className="text-emerald-700/70 mt-2 max-w-2xl">
-                Track your listings, purchases, saved items, reviews, and unread updates in one place.
-              </p>
+    <div className="min-h-screen bg-emerald-50/30 flex flex-col md:flex-row">
+      {/* Mobile Header with Tab Selection */}
+      <div className="md:hidden bg-white border-b border-emerald-100 sticky top-0 z-30 px-4 py-3">
+        <div className="flex items-center justify-between mb-3">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+              <Package className="text-white w-5 h-5" />
             </div>
-
-            <div className="flex flex-wrap gap-3">
-              <Link
-                to="/profile"
-                className="px-5 py-3 rounded-2xl bg-emerald-600 text-white font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all"
-              >
-                My Profile
-              </Link>
-              <Link
-                to="/profile?tab=listings"
-                className="px-5 py-3 rounded-2xl border border-emerald-100 text-emerald-700 font-bold hover:bg-emerald-50 transition-all"
-              >
-                Manage Listings
-              </Link>
-            </div>
-          </div>
+            <span className="text-lg font-black text-emerald-950">EcoSwap</span>
+          </Link>
+          <button 
+            onClick={logout}
+            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
         </div>
-
-        {error && (
-          <div className="rounded-3xl border border-red-100 bg-red-50 px-6 py-4 text-red-600 font-medium">
-            {error}
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-          {stats.map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-white rounded-[2rem] border border-emerald-100 shadow-sm p-6"
+        <div className="flex overflow-x-auto pb-2 no-scrollbar gap-2">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as Tab)}
+              className={`whitespace-nowrap px-4 py-2 rounded-xl font-bold text-sm transition-all shrink-0 ${
+                activeTab === item.id 
+                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-200" 
+                  : "bg-emerald-50 text-emerald-600/70 hover:text-emerald-600"
+              }`}
             >
-              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
-                <stat.icon className="w-6 h-6" />
-              </div>
-              <p className="text-sm font-bold uppercase tracking-widest text-emerald-400">
-                {stat.label}
-              </p>
-              <p className="text-3xl font-black text-emerald-950 mt-2">{stat.value}</p>
-            </div>
+              {item.label}
+            </button>
           ))}
         </div>
+      </div>
 
-        <div className="bg-white rounded-[2.5rem] border border-emerald-100 shadow-sm p-4 sm:p-6">
-          <div className="flex flex-wrap gap-3 mb-6">
-            {(["overview", "purchases", "wishlist", "notifications", "reviews"] as DashboardTab[]).map(
-              (tab) => (
-                <button
-                  key={tab}
-                  onClick={() => switchTab(tab)}
-                  className={`px-4 py-2 rounded-2xl text-sm font-bold transition-all ${
-                    activeTab === tab
-                      ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200"
-                      : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                  }`}
-                >
-                  {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                </button>
-              )
+      {/* Sidebar (Desktop) */}
+      <aside className="w-64 bg-white border-r border-emerald-100 hidden md:flex flex-col sticky top-0 h-screen">
+        <div className="p-6 border-b border-emerald-50">
+          <Link to="/" className="flex items-center gap-2">
+            <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center">
+              <Package className="text-white w-5 h-5" />
+            </div>
+            <span className="text-xl font-black text-emerald-950">EcoSwap</span>
+          </Link>
+        </div>
+
+        <nav className="flex-1 p-4 space-y-2">
+          {sidebarItems.map((item) => (
+            <button
+              key={item.id}
+              onClick={() => setActiveTab(item.id as Tab)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all ${
+                activeTab === item.id 
+                  ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200" 
+                  : "text-emerald-600/70 hover:bg-emerald-50 hover:text-emerald-600"
+              }`}
+            >
+              <item.icon className="w-5 h-5" />
+              {item.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-4 border-t border-emerald-50 space-y-2">
+          <button 
+            onClick={() => navigate("/profile")}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-emerald-600/70 hover:bg-emerald-50 hover:text-emerald-600 transition-all"
+          >
+            <Settings className="w-5 h-5" />
+            Settings
+          </button>
+          <button 
+            onClick={logout}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-red-500 hover:bg-red-50 transition-all"
+          >
+            <LogOut className="w-5 h-5" />
+            Logout
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 p-4 sm:p-6 md:p-8">
+        <header className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-black text-emerald-950 capitalize">{activeTab}</h1>
+            <p className="text-emerald-600/70 font-medium text-sm sm:text-base">Welcome back, {user.name}!</p>
+          </div>
+          <div className="flex items-center">
+            <Link to="/sell" className="w-full sm:w-auto text-center px-6 py-3 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all">
+              List New Item
+            </Link>
+          </div>
+        </header>
+
+        <div className="space-y-8">
+          {/* Overview Section */}
+          {activeTab === "overview" && summary && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <StatCard 
+                label="Total Products" 
+                value={summary.totalProducts} 
+                icon={Package} 
+                color="emerald" 
+              />
+              <StatCard 
+                label="Products Sold" 
+                value={summary.totalSold} 
+                icon={CheckCircle2} 
+                color="teal" 
+              />
+              <StatCard 
+                label="My Purchases" 
+                value={summary.totalPurchases} 
+                icon={ShoppingBag} 
+                color="blue" 
+              />
+              <StatCard 
+                label="Wishlist Items" 
+                value={summary.totalWishlist} 
+                icon={Heart} 
+                color="rose" 
+              />
+              <StatCard 
+                label="Active Chats" 
+                value={summary.totalChats} 
+                icon={MessageSquare} 
+                color="orange" 
+              />
+              <StatCard 
+                label="Notifications" 
+                value={summary.totalNotifications} 
+                icon={Bell} 
+                color="amber" 
+              />
+            </div>
+          )}
+
+          {/* Tab Content */}
+          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-xl shadow-emerald-100/50 border border-emerald-50 overflow-hidden">
+            {loading ? (
+              <div className="p-10 sm:p-20 flex flex-col items-center justify-center">
+                <Loader2 className="w-10 h-10 text-emerald-600 animate-spin mb-4" />
+                <p className="text-emerald-600 font-bold">Loading your data...</p>
+              </div>
+            ) : error ? (
+              <div className="p-10 sm:p-20 text-center">
+                <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+                <p className="text-red-500 font-bold">{error}</p>
+                <button onClick={fetchTabData} className="mt-4 text-emerald-600 font-bold hover:underline">Try Again</button>
+              </div>
+            ) : (
+              <div className="p-4 sm:p-8">
+                {activeTab === "products" && <ProductsTable products={data} onDelete={handleDeleteProduct} onMarkSold={handleMarkAsSold} />}
+                {activeTab === "sold" && <SoldProductsTable products={data} />}
+                {activeTab === "purchases" && <PurchasesTable purchases={data} />}
+                {activeTab === "wishlist" && <WishlistTable items={data} />}
+                {activeTab === "reviews" && <ReviewsTable reviews={data} />}
+                {activeTab === "notifications" && <NotificationsList notifications={data} />}
+                {activeTab === "overview" && <RecentActivity summary={summary} />}
+              </div>
             )}
           </div>
-
-          {activeTab === "overview" && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {[
-                { label: "Sold Listings", value: summary?.totalSold ?? 0, href: "/profile?tab=listings" },
-                { label: "Open Chats", value: summary?.totalChats ?? 0, href: "/chats" },
-                { label: "Saved Items", value: wishlist.length, href: "/profile?tab=wishlist" },
-                { label: "Cart Items", value: "Open Cart", href: "/profile?tab=cart" },
-              ].map((item) => (
-                <Link
-                  key={item.label}
-                  to={item.href}
-                  className="rounded-[2rem] border border-emerald-100 bg-emerald-50/50 p-6 hover:bg-emerald-50 transition-all"
-                >
-                  <p className="text-sm font-bold uppercase tracking-widest text-emerald-400">{item.label}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                    <p className="text-2xl font-black text-emerald-950">{item.value}</p>
-                    <ChevronRight className="w-5 h-5 text-emerald-500" />
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-
-          {activeTab === "purchases" && (
-            <div className="space-y-4">
-              {purchases.length === 0 ? (
-                <p className="text-emerald-700/70 font-medium">No purchases yet.</p>
-              ) : (
-                purchases.map((purchase) => (
-                  <div key={purchase._id} className="rounded-[2rem] border border-emerald-100 p-5">
-                    <p className="text-lg font-bold text-emerald-950">
-                      {purchase.productId?.title || "Purchased item"}
-                    </p>
-                    <p className="text-emerald-600 font-medium mt-1">
-                      Rs. {Number(purchase.amount || 0).toLocaleString()}
-                    </p>
-                    <p className="text-sm text-emerald-700/60 mt-2">
-                      {formatDistanceToNow(new Date(purchase.createdAt), { addSuffix: true })}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === "wishlist" && (
-            <div className="space-y-4">
-              {wishlist.length === 0 ? (
-                <p className="text-emerald-700/70 font-medium">Your wishlist is empty.</p>
-              ) : (
-                wishlist.map((item) => (
-                  <Link
-                    key={item._id}
-                    to={`/product/${item.productId}`}
-                    className="flex items-center gap-4 rounded-[2rem] border border-emerald-100 p-4 hover:bg-emerald-50 transition-all"
-                  >
-                    <img
-                      src={item.productImageUrl}
-                      alt={item.productTitle}
-                      className="w-20 h-20 rounded-2xl object-cover border border-emerald-100"
-                    />
-                    <div className="min-w-0">
-                      <p className="font-bold text-emerald-950 truncate">{item.productTitle}</p>
-                      <p className="text-emerald-600 font-medium mt-1">
-                        Rs. {Number(item.productPrice || 0).toLocaleString()}
-                      </p>
-                    </div>
-                  </Link>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === "notifications" && (
-            <div className="space-y-4">
-              {notifications.length === 0 ? (
-                <p className="text-emerald-700/70 font-medium">No notifications yet.</p>
-              ) : (
-                notifications.map((notification) => (
-                  <div
-                    key={notification._id}
-                    className={`rounded-[2rem] border p-5 ${
-                      notification.read
-                        ? "border-emerald-100 bg-white"
-                        : "border-emerald-200 bg-emerald-50/60"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div>
-                        <p className="font-bold text-emerald-950">{notification.title}</p>
-                        <p className="text-emerald-700/70 mt-1">{notification.message}</p>
-                      </div>
-                      {!notification.read && (
-                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">
-                          New
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-sm text-emerald-700/60 mt-3">
-                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
-
-          {activeTab === "reviews" && (
-            <div className="space-y-4">
-              {reviews.length === 0 ? (
-                <p className="text-emerald-700/70 font-medium">You have not posted any reviews yet.</p>
-              ) : (
-                reviews.map((review) => (
-                  <div key={review._id} className="rounded-[2rem] border border-emerald-100 p-5">
-                    <div className="flex items-center gap-2 text-amber-500 mb-2">
-                      {Array.from({ length: 5 }).map((_, index) => (
-                        <Star
-                          key={index}
-                          className={`w-4 h-4 ${
-                            index < Number(review.rating) ? "fill-current" : ""
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <p className="font-bold text-emerald-950">
-                      {review.productId?.title || "Reviewed item"}
-                    </p>
-                    <p className="text-emerald-700/80 mt-2">{review.comment}</p>
-                    <p className="text-sm text-emerald-700/60 mt-3">
-                      {formatDistanceToNow(new Date(review.createdAt), { addSuffix: true })}
-                    </p>
-                  </div>
-                ))
-              )}
-            </div>
-          )}
         </div>
+      </main>
+    </div>
+  );
+}
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {[
-            { label: "Go to Chats", icon: MessageCircle, href: "/chats" },
-            { label: "Manage Cart", icon: ShoppingBag, href: "/profile?tab=cart" },
-            { label: "My Wishlist", icon: Heart, href: "/profile?tab=wishlist" },
-          ].map((item) => (
-            <Link
-              key={item.label}
-              to={item.href}
-              className="bg-white rounded-[2rem] border border-emerald-100 p-5 flex items-center justify-between hover:bg-emerald-50 transition-all"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <item.icon className="w-5 h-5" />
-                </div>
-                <span className="font-bold text-emerald-950">{item.label}</span>
-              </div>
-              <ChevronRight className="w-5 h-5 text-emerald-500" />
-            </Link>
-          ))}
-        </div>
+function StatCard({ label, value, icon: Icon, color }: any) {
+  const colors: any = {
+    emerald: "bg-emerald-50 text-emerald-600",
+    teal: "bg-teal-50 text-teal-600",
+    blue: "bg-blue-50 text-blue-600",
+    rose: "bg-rose-50 text-rose-600",
+    orange: "bg-orange-50 text-orange-600",
+    amber: "bg-amber-50 text-amber-600",
+  };
+
+  return (
+    <div className="bg-white p-6 sm:p-8 rounded-[2rem] shadow-xl shadow-emerald-100/20 border border-emerald-50 flex items-center gap-4 sm:gap-6">
+      <div className={`w-12 h-12 sm:w-16 sm:h-16 rounded-2xl flex items-center justify-center shrink-0 ${colors[color]}`}>
+        <Icon className="w-6 h-6 sm:w-8 sm:h-8" />
       </div>
+      <div>
+        <p className="text-emerald-600/60 font-bold text-[10px] sm:text-sm uppercase tracking-wider">{label}</p>
+        <p className="text-xl sm:text-3xl font-black text-emerald-950">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function ProductsTable({ products, onDelete, onMarkSold }: any) {
+  if (!products?.length) return <EmptyState label="No products listed yet." />;
+
+  return (
+    <div className="space-y-4">
+      {/* Desktop Table */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="text-left border-b border-emerald-50">
+              <th className="pb-4 font-black text-emerald-950">Product</th>
+              <th className="pb-4 font-black text-emerald-950">Price</th>
+              <th className="pb-4 font-black text-emerald-950">Status</th>
+              <th className="pb-4 font-black text-emerald-950">Date</th>
+              <th className="pb-4 font-black text-emerald-950 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-emerald-50">
+            {products.map((p: any) => (
+              <tr key={p.id} className="group">
+                <td className="py-4">
+                  <div className="flex items-center gap-4">
+                    <img src={p.imageUrl || (p.images && p.images[0])} alt={p.title} className="w-12 h-12 rounded-xl object-cover" />
+                    <span className="font-bold text-emerald-950">{p.title}</span>
+                  </div>
+                </td>
+                <td className="py-4 font-bold text-emerald-600">₹{p.price}</td>
+                <td className="py-4">
+                  <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                    p.status === 'available' ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {p.status}
+                  </span>
+                </td>
+                <td className="py-4 text-emerald-600/60 font-medium">
+                  {new Date(p.createdAt).toLocaleDateString()}
+                </td>
+                <td className="py-4 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    {p.status === 'available' && (
+                      <button 
+                        onClick={() => onMarkSold(p.id)}
+                        className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-all"
+                        title="Mark as Sold"
+                      >
+                        <CheckCircle2 className="w-5 h-5" />
+                      </button>
+                    )}
+                    <Link 
+                      to={`/edit/${p.id}`}
+                      className="p-2 text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
+                      title="Edit"
+                    >
+                      <Edit className="w-5 h-5" />
+                    </Link>
+                    <Link 
+                      to={`/product/${p.id}`}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      title="View"
+                    >
+                      <ExternalLink className="w-5 h-5" />
+                    </Link>
+                    <button 
+                      onClick={() => onDelete(p.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                      title="Delete"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-4">
+        {products.map((p: any) => (
+          <div key={p.id} className="bg-emerald-50/30 p-4 rounded-2xl border border-emerald-50 space-y-4">
+            <div className="flex items-center gap-4">
+              <img src={p.imageUrl || (p.images && p.images[0])} alt={p.title} className="w-16 h-16 rounded-xl object-cover" />
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-emerald-950 truncate">{p.title}</h4>
+                <p className="text-emerald-600 font-black">₹{p.price}</p>
+                <span className={`inline-block mt-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                  p.status === 'available' ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {p.status}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-4 border-t border-emerald-50">
+              <span className="text-[10px] text-emerald-600/60 font-bold uppercase">{new Date(p.createdAt).toLocaleDateString()}</span>
+              <div className="flex items-center gap-2">
+                {p.status === 'available' && (
+                  <button 
+                    onClick={() => onMarkSold(p.id)}
+                    className="p-2 bg-white text-emerald-600 rounded-lg border border-emerald-100"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                  </button>
+                )}
+                <Link to={`/edit/${p.id}`} className="p-2 bg-white text-amber-600 rounded-lg border border-emerald-100">
+                  <Edit className="w-4 h-4" />
+                </Link>
+                <Link to={`/product/${p.id}`} className="p-2 bg-white text-blue-600 rounded-lg border border-emerald-100">
+                  <ExternalLink className="w-4 h-4" />
+                </Link>
+                <button 
+                  onClick={() => onDelete(p.id)}
+                  className="p-2 bg-white text-red-500 rounded-lg border border-emerald-100"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function SoldProductsTable({ products }: any) {
+  if (!products?.length) return <EmptyState label="No items sold yet." />;
+
+  return (
+    <div className="space-y-4">
+      {/* Desktop Table */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="text-left border-b border-emerald-50">
+              <th className="pb-4 font-black text-emerald-950">Product</th>
+              <th className="pb-4 font-black text-emerald-950">Price</th>
+              <th className="pb-4 font-black text-emerald-950">Buyer</th>
+              <th className="pb-4 font-black text-emerald-950">Sold Date</th>
+              <th className="pb-4 font-black text-emerald-950 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-emerald-50">
+            {products.map((p: any) => (
+              <tr key={p.id} className="group">
+                <td className="py-4">
+                  <div className="flex items-center gap-4">
+                    <img src={p.imageUrl || (p.images && p.images[0])} alt={p.title} className="w-12 h-12 rounded-xl object-cover" />
+                    <span className="font-bold text-emerald-950">{p.title}</span>
+                  </div>
+                </td>
+                <td className="py-4 font-bold text-emerald-600">₹{p.price}</td>
+                <td className="py-4">
+                  <span className="font-bold text-emerald-950">{p.buyerName || "Direct Sale"}</span>
+                </td>
+                <td className="py-4 text-emerald-600/60 font-medium">
+                  {new Date(p.soldAt).toLocaleDateString()}
+                </td>
+                <td className="py-4 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <Link 
+                      to={`/product/${p.productId}`}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                      title="View Original"
+                    >
+                      <ExternalLink className="w-5 h-5" />
+                    </Link>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-4">
+        {products.map((p: any) => (
+          <div key={p.id} className="bg-emerald-50/30 p-4 rounded-2xl border border-emerald-50 space-y-4">
+            <div className="flex items-center gap-4">
+              <img src={p.imageUrl || (p.images && p.images[0])} alt={p.title} className="w-16 h-16 rounded-xl object-cover" />
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-emerald-950 truncate">{p.title}</h4>
+                <p className="text-emerald-600 font-black">₹{p.price}</p>
+                <p className="text-xs text-emerald-800/60 font-medium">Buyer: {p.buyerName || "Direct Sale"}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-4 border-t border-emerald-50">
+              <span className="text-[10px] text-emerald-600/60 font-bold uppercase">{new Date(p.soldAt).toLocaleDateString()}</span>
+              <Link to={`/product/${p.productId}`} className="p-2 bg-white text-blue-600 rounded-lg border border-emerald-100">
+                <ExternalLink className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PurchasesTable({ purchases }: any) {
+  if (!purchases?.length) return <EmptyState label="No purchases yet." />;
+
+  return (
+    <div className="space-y-4">
+      {/* Desktop Table */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="text-left border-b border-emerald-50">
+              <th className="pb-4 font-black text-emerald-950">Product</th>
+              <th className="pb-4 font-black text-emerald-950">Amount Paid</th>
+              <th className="pb-4 font-black text-emerald-950">Order ID</th>
+              <th className="pb-4 font-black text-emerald-950">Date</th>
+              <th className="pb-4 font-black text-emerald-950 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-emerald-50">
+            {purchases.map((p: any) => (
+              <tr key={p._id}>
+                <td className="py-4">
+                  <div className="flex items-center gap-4">
+                    <img src={p.productId?.imageUrl || (p.productId?.images && p.productId?.images[0])} alt={p.productId?.title} className="w-12 h-12 rounded-xl object-cover" />
+                    <span className="font-bold text-emerald-950">{p.productId?.title || "Product Deleted"}</span>
+                  </div>
+                </td>
+                <td className="py-4 font-bold text-emerald-600">₹{p.amount}</td>
+                <td className="py-4 text-emerald-600/60 font-mono text-xs">{p.orderId}</td>
+                <td className="py-4 text-emerald-600/60 font-medium">
+                  {new Date(p.createdAt).toLocaleDateString()}
+                </td>
+                <td className="py-4 text-right">
+                  <Link 
+                    to={`/product/${p.productId?._id}`}
+                    className="inline-flex items-center gap-2 text-emerald-600 font-bold hover:underline"
+                  >
+                    View <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-4">
+        {purchases.map((p: any) => (
+          <div key={p._id} className="bg-emerald-50/30 p-4 rounded-2xl border border-emerald-50 space-y-4">
+            <div className="flex items-center gap-4">
+              <img src={p.productId?.imageUrl || (p.productId?.images && p.productId?.images[0])} alt={p.productId?.title} className="w-16 h-16 rounded-xl object-cover" />
+              <div className="flex-1 min-w-0">
+                <h4 className="font-bold text-emerald-950 truncate">{p.productId?.title || "Product Deleted"}</h4>
+                <p className="text-emerald-600 font-black">₹{p.amount}</p>
+                <p className="text-[10px] text-emerald-600/40 font-mono truncate">{p.orderId}</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-between pt-4 border-t border-emerald-50">
+              <span className="text-[10px] text-emerald-600/60 font-bold uppercase">{new Date(p.createdAt).toLocaleDateString()}</span>
+              <Link to={`/product/${p.productId?._id}`} className="p-2 bg-white text-emerald-600 rounded-lg border border-emerald-100">
+                <ArrowRight className="w-4 h-4" />
+              </Link>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WishlistTable({ items }: any) {
+  if (!items?.length) return <EmptyState label="Wishlist is empty." />;
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {items.map((item: any) => (
+        <div key={item._id} className="flex items-center gap-4 p-4 bg-emerald-50/30 rounded-2xl border border-emerald-50 group hover:bg-white hover:shadow-lg transition-all">
+          <img src={item.productImageUrl || (item.productImages && item.productImages[0])} alt={item.productTitle} className="w-20 h-20 rounded-xl object-cover" />
+          <div className="flex-1">
+            <h4 className="font-bold text-emerald-950">{item.productTitle}</h4>
+            <p className="text-emerald-600 font-black">₹{item.productPrice}</p>
+          </div>
+          <Link to={`/product/${item.productId}`} className="p-3 bg-white text-emerald-600 rounded-xl shadow-sm hover:bg-emerald-600 hover:text-white transition-all">
+            <ExternalLink className="w-5 h-5" />
+          </Link>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ReviewsTable({ reviews }: any) {
+  if (!reviews?.length) return <EmptyState label="No reviews written yet." />;
+
+  return (
+    <div className="space-y-4">
+      {reviews.map((r: any) => (
+        <div key={r._id} className="p-6 bg-emerald-50/30 rounded-2xl border border-emerald-50">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <img src={r.productId?.imageUrl || (r.productId?.images && r.productId?.images[0])} alt={r.productId?.title} className="w-12 h-12 rounded-xl object-cover" />
+              <div>
+                <h4 className="font-bold text-emerald-950">{r.productId?.title || "Product Deleted"}</h4>
+                <div className="flex items-center gap-1">
+                  {[...Array(5)].map((_, i) => (
+                    <Star key={i} className={`w-3 h-3 ${i < r.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-300'}`} />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <span className="text-xs text-emerald-600/60 font-medium">{new Date(r.createdAt).toLocaleDateString()}</span>
+          </div>
+          <p className="text-emerald-800/80 font-medium italic">"{r.comment}"</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function NotificationsList({ notifications }: any) {
+  if (!notifications?.length) return <EmptyState label="No notifications." />;
+
+  return (
+    <div className="space-y-4">
+      {notifications.map((n: any) => (
+        <div key={n._id} className={`p-4 rounded-2xl border flex items-start gap-4 ${n.read ? 'bg-white border-emerald-50' : 'bg-emerald-50 border-emerald-100'}`}>
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${n.type === 'message' ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+            {n.type === 'message' ? <MessageSquare className="w-5 h-5" /> : <Bell className="w-5 h-5" />}
+          </div>
+          <div className="flex-1">
+            <h4 className="font-bold text-emerald-950">{n.title}</h4>
+            <p className="text-emerald-700/70 text-sm font-medium">{n.message}</p>
+            <span className="text-[10px] text-emerald-400 font-bold uppercase mt-2 block">{new Date(n.createdAt).toLocaleString()}</span>
+          </div>
+          {n.link && (
+            <Link to={n.link} className="p-2 text-emerald-600 hover:bg-white rounded-lg transition-all">
+              <ArrowRight className="w-5 h-5" />
+            </Link>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RecentActivity({ summary }: any) {
+  return (
+    <div className="text-center py-10">
+      <TrendingUp className="w-16 h-16 text-emerald-200 mx-auto mb-4" />
+      <h3 className="text-xl font-black text-emerald-950 mb-2">Your Eco-Impact</h3>
+      <p className="text-emerald-600/70 font-medium max-w-md mx-auto mb-8">
+        By participating in EcoSwap, you've helped save resources and reduce waste. 
+        You've listed {summary.totalProducts} items and successfully swapped {summary.totalSold} of them!
+      </p>
+      <div className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-50 text-emerald-600 rounded-2xl font-bold">
+        <CheckCircle2 className="w-5 h-5" />
+        Level {Math.floor(summary.totalSold / 5) + 1} Eco-Warrior
+      </div>
+    </div>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <div className="py-20 text-center">
+      <div className="w-20 h-20 bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-6">
+        <Clock className="w-10 h-10 text-emerald-200" />
+      </div>
+      <p className="text-emerald-950 font-black text-xl mb-2">{label}</p>
+      <p className="text-emerald-600/60 font-medium">Start exploring the marketplace to see more activity here.</p>
     </div>
   );
 }

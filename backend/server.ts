@@ -1182,27 +1182,16 @@ async function startServer() {
   });
 
   // Payments
-  const razorpayKeyId = process.env.RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo";
-  const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET || "8Dm7YFRZKJaQ5EKxSsbSFzIG";
   const razorpay = new Razorpay({
-    key_id: razorpayKeyId,
-    key_secret: razorpayKeySecret,
+    key_id: process.env.RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
+    key_secret: process.env.RAZORPAY_KEY_SECRET || "8Dm7YFRZKJaQ5EKxSsbSFzIG",
   });
 
   app.post("/api/payment/create-order", authenticate, async (req: any, res) => {
     try {
       const { productId } = req.body;
-      if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
-        return res.status(400).json({ error: "Invalid product ID" });
-      }
       const product = await Product.findById(productId);
       if (!product) return res.status(404).json({ error: "Product not found" });
-      if (product.status === "sold") {
-        return res.status(409).json({ error: "This product has already been sold" });
-      }
-      if (product.sellerId === req.user.uid) {
-        return res.status(400).json({ error: "You cannot buy your own product" });
-      }
 
       const options = {
         amount: Math.round(product.price * 100), // amount in the smallest currency unit (paise)
@@ -1211,7 +1200,7 @@ async function startServer() {
       };
 
       const order = await razorpay.orders.create(options);
-      res.json({ ...order, key: razorpayKeyId });
+      res.json(order);
     } catch (error) {
       console.error("Error creating Razorpay order:", error);
       res.status(500).json({ error: "Failed to create payment order" });
@@ -1220,37 +1209,19 @@ async function startServer() {
 
   app.post("/api/payment/create-cart-order", authenticate, async (req: any, res) => {
     try {
-      const cartItems = await Cart.find({ userId: req.user.uid });
-      if (cartItems.length === 0) {
-        return res.status(400).json({ error: "Your cart is empty" });
+      const { amount } = req.body;
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ error: "Invalid amount" });
       }
 
-      let totalAmount = 0;
-      for (const item of cartItems) {
-        if (!mongoose.Types.ObjectId.isValid(item.productId)) {
-          return res.status(400).json({ error: "Cart contains an invalid product" });
-        }
-
-        const product = await Product.findById(item.productId);
-        if (!product) {
-          return res.status(404).json({ error: `Product not found for cart item ${item.productTitle}` });
-        }
-        if (product.status === "sold") {
-          return res.status(409).json({ error: `"${product.title}" has already been sold` });
-        }
-        if (product.sellerId === req.user.uid) {
-          return res.status(400).json({ error: "You cannot buy your own product" });
-        }
-
-        totalAmount += product.price;
-      }
-
-      const order = await razorpay.orders.create({
-        amount: Math.round(totalAmount * 100),
+      const options = {
+        amount: Math.round(amount * 100),
         currency: "INR",
         receipt: `cart_receipt_${Date.now()}`,
-      });
-      res.json({ ...order, key: razorpayKeyId });
+      };
+
+      const order = await razorpay.orders.create(options);
+      res.json(order);
     } catch (error) {
       console.error("Error creating Razorpay cart order:", error);
       res.status(500).json({ error: "Failed to create cart payment order" });

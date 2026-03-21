@@ -20,6 +20,7 @@ const GoogleLoginButton = ({ setLoading, setError, navigate, redirectPath, login
         method: "POST",
         body: JSON.stringify({ credential: credentialResponse.credential }),
       });
+
       login(data.token, data.user);
       navigate(redirectPath);
     } catch (err: any) {
@@ -73,52 +74,45 @@ export default function Auth() {
   const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
   const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setError("");
-  setLoading(true);
+    e.preventDefault();
+    setError("");
+    setLoading(true);
 
-  try {
-    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
+    try {
+      const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
+      const body = isLogin 
+        ? { email, password } 
+        : { email, password, name: `${firstName} ${lastName}`, phone, location };
 
-    const body = isLogin
-      ? { email, password }
-      : {
-          email,
-          password,
-          name: `${firstName} ${lastName}`,
-          phone,
-          location,
-        };
+      const data = await apiFetch<{ token: string; user: any }>(endpoint, {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
 
-    const data = await apiFetch<{ token: string; user: any }>(endpoint, {
-      method: "POST",
-      body: JSON.stringify(body),
-    });
-
-    login(data.token, data.user);
-    navigate(redirectPath);
-  } catch (err: any) {
-    setError(err.message);
-  } finally {
-    setLoading(false);
-  }
-};
+      login(data.token, data.user);
+      navigate(redirectPath);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-emerald-50/30 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-emerald-50/30 flex items-center justify-center p-4 sm:p-6 lg:p-8">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md bg-white rounded-[2.5rem] p-8 sm:p-12 shadow-2xl shadow-emerald-100 border border-emerald-50"
+        className="w-full max-w-md bg-white rounded-[2rem] sm:rounded-[2.5rem] p-6 sm:p-12 shadow-2xl shadow-emerald-100 border border-emerald-50"
       >
-        <div className="flex flex-col items-center mb-10">
+        <div className="flex flex-col items-center mb-8 sm:mb-10">
           <div className="bg-emerald-600 p-3 rounded-2xl mb-4 shadow-lg shadow-emerald-200">
-            <Recycle className="w-8 h-8 text-white" />
+            <Recycle className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
           </div>
-          <h1 className="text-3xl font-black text-emerald-950 mb-2">
+          <h1 className="text-2xl sm:text-3xl font-black text-emerald-950 mb-2 text-center">
             {isLogin ? "Welcome Back" : "Join EcoSwap"}
           </h1>
-          <p className="text-emerald-600/70 text-center font-medium">
+          <p className="text-emerald-600/70 text-center font-medium text-sm sm:text-base">
             {isLogin 
               ? "Sign in to continue your sustainable journey" 
               : "Create an account to start swapping today"}
