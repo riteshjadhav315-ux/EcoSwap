@@ -13,7 +13,7 @@ import { StarRating } from "../components/StarRating";
 import { ReviewList } from "../components/ReviewList";
 import { ReviewForm } from "../components/ReviewForm";
 import { Product } from "../types";
-import { apiFetch } from "../services/api";
+import toast from "react-hot-toast";
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -104,7 +104,7 @@ export default function ProductDetails() {
           productId: id,
           productTitle: product.title,
           productPrice: product.price,
-          productImageUrl: product.imageUrl || product.images?.[0] || ""
+          productImageUrl: product.imageUrl
         });
         setWishlistId(newWishId);
       }
@@ -115,7 +115,7 @@ export default function ProductDetails() {
 
   const handleContactSeller = async () => {
     if (!user) {
-      navigate("/auth");
+      toast("Sign In / Register", { icon: "🔐" });
       return;
     }
     
@@ -138,7 +138,6 @@ export default function ProductDetails() {
   };
 
   const [paymentSuccess, setPaymentSuccess] = useState(false);
-  const [postPaymentChatId, setPostPaymentChatId] = useState<string | null>(null);
 
   const handlePaymentSuccess = async (response: any, isSimulation = false) => {
     try {
@@ -151,23 +150,13 @@ export default function ProductDetails() {
       });
       
       // 4. Success
-      let nextChatId: string | null = null;
       if (product) {
         setProduct({ ...product, status: 'sold' });
-
-        if (user && user.uid !== product.sellerId) {
-          try {
-            nextChatId = await startChat(product, user.uid, user.name || "User");
-            setPostPaymentChatId(nextChatId);
-          } catch (chatError) {
-            console.error("Error creating post-payment chat:", chatError);
-          }
-        }
       }
       setPaymentSuccess(true);
       // Optional: navigate after a delay
       setTimeout(() => {
-        navigate(nextChatId ? `/chat/${nextChatId}` : "/chats");
+        navigate("/chats");
       }, 3000);
     } catch (err) {
       console.error("Payment verification error:", err);
@@ -207,7 +196,7 @@ export default function ProductDetails() {
 
       // 2. Open Razorpay Popup
       const options = {
-        key: order.key || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
         amount: order.amount,
         currency: order.currency,
         name: "EcoSwap",
@@ -299,10 +288,10 @@ export default function ProductDetails() {
               <p className="text-emerald-700/70 font-medium mb-8">Your purchase is complete. You can now chat with the seller to arrange pickup.</p>
               <div className="space-y-3">
                 <button 
-                  onClick={() => navigate(postPaymentChatId ? `/chat/${postPaymentChatId}` : "/chats")}
+                  onClick={() => navigate("/chats")}
                   className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200"
                 >
-                  {postPaymentChatId ? "Open Chat" : "Go to Chats"}
+                  Go to Chats
                 </button>
               </div>
             </div>
@@ -518,21 +507,11 @@ export default function ProductDetails() {
                   )}
 
                   <button 
-                    onClick={async () => {
-                      if (!user) {
-                        navigate("/auth");
-                        return;
-                      }
-
-                      try {
-                        await addToCart(product);
-                        setToastMessage(`${product.title} added to cart!`);
-                        setShowToast(true);
-                        setTimeout(() => setShowToast(false), 3000);
-                      } catch (cartError) {
-                        console.error("Failed to add to cart:", cartError);
-                        setError("Failed to add item to cart.");
-                      }
+                    onClick={() => {
+                      addToCart(product);
+                      setToastMessage(`${product.title} added to cart!`);
+                      setShowToast(true);
+                      setTimeout(() => setShowToast(false), 3000);
                     }}
                     disabled={product.status === 'sold'}
                     className={`w-full py-4 lg:py-5 rounded-2xl font-bold transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95 ${
@@ -579,8 +558,9 @@ export default function ProductDetails() {
                       const description = window.prompt("Please provide more details (optional):");
                       
                       try {
-                        await apiFetch("/api/reports", {
+                        const res = await fetch("/api/reports", {
                           method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             reporterId: user.uid,
                             targetId: id,
@@ -589,12 +569,9 @@ export default function ProductDetails() {
                             description
                           })
                         });
-                        setToastMessage("Report submitted successfully.");
-                        setShowToast(true);
-                        setTimeout(() => setShowToast(false), 3000);
+                        if (res.ok) alert("Report submitted successfully.");
                       } catch (err) {
                         console.error("Error reporting product:", err);
-                        setError("Failed to submit report.");
                       }
                     }}
                     className="w-full py-3 text-red-500 font-bold hover:bg-red-50 rounded-xl transition-all flex items-center justify-center gap-2"
