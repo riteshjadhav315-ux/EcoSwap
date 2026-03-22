@@ -149,7 +149,10 @@ export default function Auth() {
                       type="text"
                       required={!isLogin}
                       value={firstName}
-                      onChange={(e) => setFirstName(e.target.value)}
+                      onChange={(e) => {
+                        setFirstName(e.target.value);
+                        if (error) setError("");
+                      }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                       placeholder="John"
                     />
@@ -165,7 +168,10 @@ export default function Auth() {
                       type="text"
                       required={!isLogin}
                       value={lastName}
-                      onChange={(e) => setLastName(e.target.value)}
+                      onChange={(e) => {
+                        setLastName(e.target.value);
+                        if (error) setError("");
+                      }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                       placeholder="Doe"
                     />
@@ -193,7 +199,10 @@ export default function Auth() {
                       type="tel"
                       required={!isLogin}
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => {
+                        setPhone(e.target.value);
+                        if (error) setError("");
+                      }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                       placeholder="+1 (555) 000-0000"
                     />
@@ -210,7 +219,10 @@ export default function Auth() {
                       type="text"
                       required={!isLogin}
                       value={location}
-                      onChange={(e) => setLocation(e.target.value)}
+                      onChange={(e) => {
+                        setLocation(e.target.value);
+                        if (error) setError("");
+                      }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                       placeholder="City, Country"
                     />
@@ -230,7 +242,10 @@ export default function Auth() {
                 type="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (error) setError("");
+                }}
                 className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                 placeholder="you@example.com"
               />
@@ -247,7 +262,10 @@ export default function Auth() {
                 type="password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError("");
+                }}
                 className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                 placeholder="••••••••"
               />

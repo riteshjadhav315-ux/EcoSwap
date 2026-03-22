@@ -274,8 +274,11 @@ async function startServer() {
   app.post("/api/auth/register", async (req, res) => {
     try {
       const { email, password, name } = req.body;
+      if (!password || password.length < 6) {
+        return res.status(400).json({ error: "Password must be at least 6 characters long." });
+      }
       let user = await User.findOne({ email });
-      if (user) return res.status(400).json({ error: "User already exists" });
+      if (user) return res.status(400).json({ error: "This email is already registered. Please sign in instead." });
 
       const hashedPassword = await bcrypt.hash(password, 10);
       const uid = new mongoose.Types.ObjectId().toString();
@@ -293,11 +296,11 @@ async function startServer() {
     try {
       const { email, password } = req.body;
       const user = await User.findOne({ email });
-      if (!user) return res.status(400).json({ error: "Invalid credentials" });
+      if (!user) return res.status(404).json({ error: "Email not found. Please check your email or register." });
 
       // @ts-ignore
       const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) return res.status(400).json({ error: "Invalid credentials" });
+      if (!isMatch) return res.status(401).json({ error: "Incorrect password. Please try again." });
 
       const token = jwt.sign({ uid: user.uid, role: user.role }, JWT_SECRET);
       res.json({ token, user });
