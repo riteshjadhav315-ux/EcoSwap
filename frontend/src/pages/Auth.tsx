@@ -3,44 +3,54 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Mail, Lock, Recycle, ArrowRight, AlertCircle, Loader2, User, Phone, MapPin } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { useGoogleLogin } from "@react-oauth/google";
+import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
+import { apiFetch } from "../services/api";
 
 const GoogleLoginButton = ({ setLoading, setError, navigate, redirectPath, login, loading }: any) => {
-  const handleGoogleSignIn = useGoogleLogin({
-    flow: 'auth-code',
-    onSuccess: async (codeResponse) => {
-      setLoading(true);
-      setError("");
-      try {
-        const response = await fetch("/api/auth/google", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code: codeResponse.code }),
-        });
+  const handleGoogleSignIn = async (credentialResponse: CredentialResponse) => {
+    if (!credentialResponse.credential) {
+      setError("Google login failed");
+      return;
+    }
 
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Google login failed");
+    setLoading(true);
+    setError("");
+    try {
+      const data = await apiFetch<{ token: string; user: any }>("/api/auth/google", {
+        method: "POST",
+        body: JSON.stringify({ credential: credentialResponse.credential }),
+      });
 
-        login(data.token, data.user);
-        navigate(redirectPath);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    },
-    onError: () => setError("Google login failed"),
-  });
+      login(data.token, data.user);
+      navigate(redirectPath);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <button
-      onClick={() => handleGoogleSignIn()}
-      disabled={loading}
-      className="mt-6 w-full py-4 bg-white border border-emerald-100 text-emerald-950 rounded-2xl font-bold hover:bg-emerald-50 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
-    >
-      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-      Google
-    </button>
+    <div className="mt-6">
+      <div className="flex justify-center">
+        <GoogleLogin
+          onSuccess={handleGoogleSignIn}
+          onError={() => setError("Google login failed")}
+          theme="outline"
+          size="large"
+          text="signin_with"
+          shape="pill"
+          width="320"
+          use_fedcm_for_button={true}
+        />
+      </div>
+      {loading && (
+        <div className="mt-4 flex items-center justify-center gap-2 text-sm font-medium text-emerald-600">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Signing in with Google...
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -74,17 +84,10 @@ export default function Auth() {
         ? { email, password } 
         : { email, password, name: `${firstName} ${lastName}`, phone, location };
 
-      const response = await fetch(endpoint, {
+      const data = await apiFetch<{ token: string; user: any }>(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Authentication failed");
-      }
 
       login(data.token, data.user);
       navigate(redirectPath);

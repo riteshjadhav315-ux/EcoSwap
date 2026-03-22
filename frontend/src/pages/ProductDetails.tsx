@@ -13,7 +13,7 @@ import { StarRating } from "../components/StarRating";
 import { ReviewList } from "../components/ReviewList";
 import { ReviewForm } from "../components/ReviewForm";
 import { Product } from "../types";
-import toast from "react-hot-toast";
+import { apiFetch } from "../services/api";
 
 export default function ProductDetails() {
   const { id } = useParams();
@@ -115,7 +115,7 @@ export default function ProductDetails() {
 
   const handleContactSeller = async () => {
     if (!user) {
-      toast("Sign In / Register", { icon: "🔐" });
+      navigate("/auth");
       return;
     }
     
@@ -150,13 +150,22 @@ export default function ProductDetails() {
       });
       
       // 4. Success
+      let nextChatId: string | null = null;
       if (product) {
         setProduct({ ...product, status: 'sold' });
+
+        if (user && user.uid !== product.sellerId) {
+          try {
+            nextChatId = await startChat(product, user.uid, user.name || "User");
+          } catch (chatError) {
+            console.error("Error creating post-payment chat:", chatError);
+          }
+        }
       }
       setPaymentSuccess(true);
       // Optional: navigate after a delay
       setTimeout(() => {
-        navigate("/chats");
+        navigate(nextChatId ? `/chat/${nextChatId}` : "/chats");
       }, 3000);
     } catch (err) {
       console.error("Payment verification error:", err);
@@ -196,7 +205,7 @@ export default function ProductDetails() {
 
       // 2. Open Razorpay Popup
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
+        key: order.key || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_SRx6DVGwmoT3Wo",
         amount: order.amount,
         currency: order.currency,
         name: "EcoSwap",
@@ -507,11 +516,16 @@ export default function ProductDetails() {
                   )}
 
                   <button 
-                    onClick={() => {
-                      addToCart(product);
-                      setToastMessage(`${product.title} added to cart!`);
-                      setShowToast(true);
-                      setTimeout(() => setShowToast(false), 3000);
+                    onClick={async () => {
+                      try {
+                        await addToCart(product);
+                        setToastMessage(`${product.title} added to cart!`);
+                        setShowToast(true);
+                        setTimeout(() => setShowToast(false), 3000);
+                      } catch (cartError) {
+                        console.error("Error adding to cart:", cartError);
+                        setError("Failed to add item to cart. Please try again.");
+                      }
                     }}
                     disabled={product.status === 'sold'}
                     className={`w-full py-4 lg:py-5 rounded-2xl font-bold transition-all shadow-xl flex items-center justify-center gap-3 active:scale-95 ${
@@ -558,9 +572,8 @@ export default function ProductDetails() {
                       const description = window.prompt("Please provide more details (optional):");
                       
                       try {
-                        const res = await fetch("/api/reports", {
+                        await apiFetch("/api/reports", {
                           method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             reporterId: user.uid,
                             targetId: id,
@@ -569,7 +582,7 @@ export default function ProductDetails() {
                             description
                           })
                         });
-                        if (res.ok) alert("Report submitted successfully.");
+                        alert("Report submitted successfully.");
                       } catch (err) {
                         console.error("Error reporting product:", err);
                       }
