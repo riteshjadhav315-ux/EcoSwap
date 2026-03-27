@@ -1500,13 +1500,13 @@ async function startServer() {
       let emailResult: {
         success: boolean;
         status: "sent" | "failed" | "skipped";
-        provider: "gmail";
+        provider: "resend";
         error?: string;
         messageId?: string;
       } = {
         success: existingOrder.emailStatus === "sent",
         status: existingOrder.emailStatus === "pending" ? "failed" : existingOrder.emailStatus,
-        provider: "gmail" as const,
+        provider: "resend" as const,
         error: existingOrder.emailError || undefined,
         messageId: existingOrder.emailMessageId || undefined,
       };

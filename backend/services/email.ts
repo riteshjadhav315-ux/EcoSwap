@@ -1,4 +1,5 @@
-import nodemailer from "nodemailer";
+const RESEND_API_URL = "https://api.resend.com/emails";
+const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS || 12000);
 
 export type EmailStatus = "sent" | "failed" | "skipped";
 
@@ -23,13 +24,17 @@ export interface InvoiceOrderSummary {
 export interface InvoiceEmailResult {
   success: boolean;
   status: EmailStatus;
-  provider: "gmail";
+  provider: "resend";
   messageId?: string;
   error?: string;
+  responseBody?: unknown;
 }
 
-let transporter: nodemailer.Transporter | null = null;
-const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS || 12000);
+interface ResendSendEmailResponse {
+  id?: string;
+  message?: string;
+  name?: string;
+}
 
 const escapeHtml = (value: string) =>
   value
@@ -47,34 +52,8 @@ const formatCurrency = (amount: number, currency = "INR") => {
       maximumFractionDigits: 2,
     }).format(amount);
   } catch {
-    return `₹${amount.toFixed(2)}`;
+    return `Rs. ${amount.toFixed(2)}`;
   }
-};
-
-const getTransporter = () => {
-  if (transporter) {
-    return transporter;
-  }
-
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
-
-  if (!user || !pass) {
-    return null;
-  }
-
-  transporter = nodemailer.createTransport({
-    service: "gmail",
-    connectionTimeout: EMAIL_TIMEOUT_MS,
-    greetingTimeout: EMAIL_TIMEOUT_MS,
-    socketTimeout: EMAIL_TIMEOUT_MS,
-    auth: {
-      user,
-      pass,
-    },
-  });
-
-  return transporter;
 };
 
 export const buildInvoiceEmailHtml = (order: InvoiceOrderSummary) => {
@@ -149,28 +128,51 @@ export const buildInvoiceEmailHtml = (order: InvoiceOrderSummary) => {
   `;
 };
 
+const normalizeResendError = (status: number, body: unknown) => {
+  const bodyMessage =
+    typeof body === "object" && body !== null
+      ? ((body as Record<string, unknown>).message as string | undefined) ||
+        ((body as Record<string, unknown>).name as string | undefined)
+      : undefined;
+
+  if (bodyMessage && /verify a domain|onboarding@resend\.dev|testing emails/i.test(bodyMessage)) {
+    return "Resend accepted only test-recipient sending for your current sender. Verify a domain in Resend to send invoices to any buyer email.";
+  }
+
+  if (status === 401 || /api key/i.test(bodyMessage || "")) {
+    return "Resend authentication failed. Check RESEND_API_KEY.";
+  }
+
+  if (status === 422) {
+    return bodyMessage || "Resend rejected the email request. Check EMAIL_FROM and recipient email.";
+  }
+
+  return bodyMessage || `Resend email request failed with status ${status}.`;
+};
+
 export async function sendInvoiceEmail(
   userEmail: string,
   order: InvoiceOrderSummary
 ): Promise<InvoiceEmailResult> {
-  const transporterInstance = getTransporter();
-  const emailUser = process.env.EMAIL_USER;
+  const apiKey = (process.env.RESEND_API_KEY || "").trim();
+  const from = (process.env.EMAIL_FROM || "").trim();
+  const replyTo = (process.env.EMAIL_REPLY_TO || "").trim();
 
-  if (!emailUser || !process.env.EMAIL_PASS) {
+  if (!apiKey) {
     return {
       success: false,
       status: "failed",
-      provider: "gmail",
-      error: "EMAIL_USER or EMAIL_PASS is not configured.",
+      provider: "resend",
+      error: "RESEND_API_KEY is not configured.",
     };
   }
 
-  if (!transporterInstance) {
+  if (!from) {
     return {
       success: false,
       status: "failed",
-      provider: "gmail",
-      error: "Gmail transporter could not be initialized.",
+      provider: "resend",
+      error: "EMAIL_FROM is not configured.",
     };
   }
 
@@ -178,47 +180,73 @@ export async function sendInvoiceEmail(
     return {
       success: false,
       status: "failed",
-      provider: "gmail",
+      provider: "resend",
       error: "Buyer email is missing.",
     };
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), EMAIL_TIMEOUT_MS);
+
   try {
-    const sendMailPromise = transporterInstance.sendMail({
-      from: `EcoSwap <${emailUser}>`,
-      to: userEmail,
+    const payload: Record<string, unknown> = {
+      from,
+      to: [userEmail],
       subject: "Order Invoice - EcoSwap",
       html: buildInvoiceEmailHtml(order),
+      headers: {
+        "X-EcoSwap-Order-Id": order.orderId,
+        "X-EcoSwap-Payment-Id": order.paymentId,
+      },
+    };
+
+    if (replyTo) {
+      payload.reply_to = replyTo;
+    }
+
+    const response = await fetch(RESEND_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
     });
 
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => {
-        reject(new Error(`Invoice email timed out after ${EMAIL_TIMEOUT_MS / 1000} seconds.`));
-      }, EMAIL_TIMEOUT_MS);
-    });
+    const responseBody: ResendSendEmailResponse | null = await response.json().catch(() => null);
 
-    const info = await Promise.race([sendMailPromise, timeoutPromise]);
+    if (!response.ok) {
+      return {
+        success: false,
+        status: "failed",
+        provider: "resend",
+        error: normalizeResendError(response.status, responseBody),
+        responseBody,
+      };
+    }
 
     return {
       success: true,
       status: "sent",
-      provider: "gmail",
-      messageId: info.messageId,
+      provider: "resend",
+      messageId: responseBody?.id,
+      responseBody,
     };
   } catch (error) {
     const rawError = error instanceof Error ? error.message : "Unknown email error";
     const normalizedError =
-      /invalid login|auth/i.test(rawError)
-        ? "Gmail authentication failed. Check EMAIL_USER and Gmail App Password."
-        : /timed out/i.test(rawError)
-          ? "Invoice email timed out on the server. Payment succeeded, but email could not be confirmed."
-          : rawError;
+      rawError === "This operation was aborted" || /aborted/i.test(rawError)
+        ? "Invoice email timed out on the server. Payment succeeded, but email could not be confirmed."
+        : rawError;
 
     return {
       success: false,
       status: "failed",
-      provider: "gmail",
+      provider: "resend",
       error: normalizedError,
     };
+  } finally {
+    clearTimeout(timeout);
   }
 }
