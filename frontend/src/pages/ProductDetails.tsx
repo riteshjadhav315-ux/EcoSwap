@@ -143,11 +143,22 @@ export default function ProductDetails() {
     try {
       setPaymentLoading(true);
       // 3. Verify Payment
-      await verifyPayment({
+      const verificationResult = await verifyPayment({
         ...response,
         productId: id,
         simulation: isSimulation
       });
+
+      if (!verificationResult?.sms?.success) {
+        const smsError = verificationResult?.sms?.error || "Invoice SMS could not be sent.";
+        setToastMessage(`Payment successful, but SMS failed: ${smsError}`);
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 5000);
+      } else {
+        setToastMessage("Payment successful! Invoice SMS sent.");
+        setShowToast(true);
+        setTimeout(() => setShowToast(false), 4000);
+      }
       
       // 4. Success
       let nextChatId: string | null = null;

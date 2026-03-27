@@ -46,11 +46,15 @@ export default function Profile() {
         handler: async (response: any) => {
           try {
             const productIds = cartItems.map(item => item.productId);
-            await verifyPayment({
+            const verificationResult = await verifyPayment({
               ...response,
               productIds
             });
-            alert("Payment successful! Your eco-friendly items are on their way.");
+            if (verificationResult?.sms?.success) {
+              alert("Payment successful! Invoice SMS sent to your registered mobile number.");
+            } else {
+              alert(`Payment successful, but invoice SMS was not sent: ${verificationResult?.sms?.error || "Unknown SMS error"}`);
+            }
             await clearCart();
             setActiveTab("profile");
             navigate("/profile?tab=profile");
@@ -76,14 +80,18 @@ export default function Profile() {
         // Simulate payment in preview
         if (window.confirm("Simulate successful payment for this cart?")) {
           const productIds = cartItems.map(item => item.productId);
-          await verifyPayment({
+          const verificationResult = await verifyPayment({
             razorpay_order_id: order.id,
             razorpay_payment_id: `sim_pay_${Date.now()}`,
             razorpay_signature: "simulated",
             productIds,
             simulation: true
           });
-          alert("Simulated payment successful!");
+          if (verificationResult?.sms?.success) {
+            alert("Simulated payment successful! Invoice SMS sent.");
+          } else {
+            alert(`Simulated payment successful, but invoice SMS was not sent: ${verificationResult?.sms?.error || "Unknown SMS error"}`);
+          }
           await clearCart();
           setActiveTab("profile");
           navigate("/profile?tab=profile");

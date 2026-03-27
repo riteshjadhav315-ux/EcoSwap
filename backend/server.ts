@@ -29,10 +29,12 @@ import { Chat, Message } from "./models/Chat";
 import { Notification } from "./models/Notification";
 import { Wishlist } from "./models/Wishlist";
 import { Payment } from "./models/Payment";
+import { Order } from "./models/Order";
 import { Report } from "./models/Report";
 import { Review } from "./models/Review";
 import { SoldProduct } from "./models/SoldProduct";
 import { Cart } from "./models/Cart";
+import { sendOrderConfirmationSms } from "./services/sms";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
@@ -1260,11 +1262,16 @@ async function startServer() {
     }
   });
 
-  const moveProductToSold = async (productId: string, buyerId?: string, buyerName?: string) => {
-    const product = await Product.findById(productId);
-    if (!product) throw new Error("Product not found");
+  const moveProductToSold = async (productOrId: any, buyerId?: string, buyerName?: string) => {
+    const product =
+      typeof productOrId === "string"
+        ? await Product.findById(productOrId)
+        : productOrId;
 
-    // Create sold product entry
+    if (!product) {
+      throw new Error("Product not found");
+    }
+
     const soldProduct = new SoldProduct({
       productId: product._id,
       title: product.title,
@@ -1286,7 +1293,6 @@ async function startServer() {
 
     await soldProduct.save();
 
-    // Update original product status
     product.status = "sold";
     await product.save();
 
@@ -1345,17 +1351,268 @@ async function startServer() {
     return { success: true, message: "Payment processed successfully", paymentId: payment.paymentId };
   };
 
+  const notifySellerOfSale = async (product: any, orderId: string) => {
+    try {
+      const notification = new Notification({
+        userId: product.sellerId,
+        type: "system",
+        title: "Product Sold!",
+        message: `Your product "${product.title}" has been sold for Rs.${product.price}. Order ID: ${orderId}.`,
+        link: `/product/${product._id}`,
+      });
+      await notification.save();
+      io.emit(`notification_${product.sellerId}`, notification);
+    } catch (error) {
+      console.error("Error sending notification to seller:", error);
+    }
+  };
+
+  const getPurchasableProducts = async (productIds: string[], buyerId: string) => {
+    const uniqueProductIds = [...new Set(productIds.filter(Boolean))];
+
+    if (uniqueProductIds.length === 0) {
+      throw new Error("No products supplied for payment processing");
+    }
+
+    const products = [];
+
+    for (const productId of uniqueProductIds) {
+      if (!mongoose.Types.ObjectId.isValid(productId)) {
+        throw new Error(`Invalid product ID: ${productId}`);
+      }
+
+      const product = await Product.findById(productId);
+      if (!product) {
+        throw new Error(`Product not found for ID ${productId}`);
+      }
+
+      if (product.status === "sold") {
+        throw new Error(`"${product.title}" has already been sold`);
+      }
+
+      if (product.sellerId === buyerId) {
+        throw new Error("You cannot buy your own product");
+      }
+
+      products.push(product);
+    }
+
+    return products;
+  };
+
+  const buildInvoiceItems = (products: any[]) =>
+    products.map((product) => ({
+      productId: product._id,
+      productName: product.title,
+      price: product.price,
+      quantity: 1,
+      totalAmount: product.price,
+    }));
+
+  const buildSmsProductLabel = (invoiceItems: any[]) => {
+    if (invoiceItems.length === 1) {
+      return invoiceItems[0].productName;
+    }
+
+    const remainingItems = invoiceItems.length - 1;
+    return `${invoiceItems[0].productName} +${remainingItems} more item${remainingItems === 1 ? "" : "s"}`;
+  };
+
+  const buildInvoiceResponse = (order: any) => ({
+    items: order.items,
+    productName: buildSmsProductLabel(order.items),
+    quantity: order.quantity,
+    totalAmount: order.totalAmount,
+    orderId: order.orderId,
+    razorpayPaymentId: order.paymentId,
+    dateTime: order.createdAt,
+    buyerName: order.buyerName,
+  });
+
+  const attemptOrderInvoiceSms = async (order: any, buyerPhone: string) => {
+    const smsResult = await sendOrderConfirmationSms({
+      phoneNumber: buyerPhone || "",
+      productName: buildSmsProductLabel(order.items),
+      totalAmount: order.totalAmount,
+      orderId: order.orderId,
+    });
+
+    order.smsStatus = smsResult.status;
+    order.smsError = smsResult.success ? "" : smsResult.error || "";
+    if (smsResult.success) {
+      order.smsSentAt = new Date();
+    }
+
+    return smsResult;
+  };
+
+  const processVerifiedPayment = async ({
+    productIds,
+    buyerId,
+    paymentDetails,
+    skipSms = false,
+  }: {
+    productIds: string[];
+    buyerId: string;
+    paymentDetails: {
+      razorpay_order_id: string;
+      razorpay_payment_id: string;
+      razorpay_signature: string;
+    };
+    skipSms?: boolean;
+  }) => {
+    const existingOrder = await Order.findOne({
+      $or: [
+        { paymentId: paymentDetails.razorpay_payment_id },
+        { orderId: paymentDetails.razorpay_order_id },
+      ],
+    });
+
+    if (existingOrder) {
+      let smsResult: {
+        success: boolean;
+        status: "sent" | "failed" | "skipped";
+        provider: "fast2sms";
+        message: string;
+        error?: string;
+      } = {
+        success: existingOrder.smsStatus === "sent",
+        status: existingOrder.smsStatus === "pending" ? "failed" : existingOrder.smsStatus,
+        provider: "fast2sms" as const,
+        message: "",
+        error: existingOrder.smsError || undefined,
+      };
+
+      if (!skipSms && existingOrder.smsStatus !== "sent") {
+        smsResult = await attemptOrderInvoiceSms(existingOrder, existingOrder.buyerPhone || "");
+        await existingOrder.save();
+      }
+
+      return {
+        success: true,
+        message: "Payment already processed",
+        paymentId: existingOrder.paymentId,
+        order: existingOrder,
+        invoice: buildInvoiceResponse(existingOrder),
+        sms: smsResult,
+      };
+    }
+
+    const buyer = await User.findOne({ uid: buyerId });
+    if (!buyer) {
+      throw new Error("Buyer not found");
+    }
+
+    const products = await getPurchasableProducts(productIds, buyerId);
+    const invoiceItems = buildInvoiceItems(products);
+    const totalAmount = invoiceItems.reduce((sum, item) => sum + item.totalAmount, 0);
+    const totalQuantity = invoiceItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    for (const product of products) {
+      const payment = new Payment({
+        orderId: paymentDetails.razorpay_order_id,
+        paymentId: paymentDetails.razorpay_payment_id,
+        signature: paymentDetails.razorpay_signature,
+        productId: product._id,
+        buyerId,
+        amount: product.price,
+        currency: "INR",
+        status: "completed",
+      });
+
+      await payment.save();
+      await moveProductToSold(product, buyerId, buyer.name);
+      await notifySellerOfSale(product, paymentDetails.razorpay_order_id);
+    }
+
+    const order = new Order({
+      orderId: paymentDetails.razorpay_order_id,
+      paymentId: paymentDetails.razorpay_payment_id,
+      signature: paymentDetails.razorpay_signature,
+      buyerId,
+      buyerName: buyer.name || "Buyer",
+      buyerPhone: buyer.phone || "",
+      items: invoiceItems,
+      quantity: totalQuantity,
+      totalAmount,
+      currency: "INR",
+      status: "paid",
+      smsStatus: "pending",
+    });
+
+    let smsResult;
+
+    if (skipSms) {
+      smsResult = {
+        success: false,
+        status: "skipped" as const,
+        provider: "fast2sms" as const,
+        message: "",
+        error: "SMS skipped for simulated payment verification.",
+      };
+      order.smsStatus = "skipped";
+      order.smsError = smsResult.error;
+    } else {
+      smsResult = await attemptOrderInvoiceSms(order, buyer.phone || "");
+      if (!smsResult.success) {
+        console.error("Fast2SMS invoice SMS failed:", smsResult.error, smsResult.responseBody || "");
+      }
+    }
+
+    await order.save();
+
+    return {
+      success: true,
+      message: "Payment processed successfully",
+      paymentId: order.paymentId,
+      order,
+      invoice: buildInvoiceResponse(order),
+      sms: smsResult,
+    };
+  };
+
+  const verifyRazorpaySignature = ({
+    orderId,
+    paymentId,
+    signature,
+  }: {
+    orderId: string;
+    paymentId: string;
+    signature: string;
+  }) => {
+    const payload = `${orderId}|${paymentId}`;
+    const expectedSignature = crypto
+      .createHmac("sha256", razorpayKeySecret)
+      .update(payload)
+      .digest("hex");
+
+    const expectedSignatureBuffer = Buffer.from(expectedSignature);
+    const receivedSignatureBuffer = Buffer.from(signature);
+
+    if (expectedSignatureBuffer.length !== receivedSignatureBuffer.length) {
+      return false;
+    }
+
+    return crypto.timingSafeEqual(expectedSignatureBuffer, receivedSignatureBuffer);
+  };
+
   const verifyPaymentHandler = async (req: any, res: express.Response) => {
     try {
       console.log("Received payment verification request:", req.body);
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature, productId, productIds, simulation } = req.body;
       const buyerId = req.user.uid;
 
-      if (!productId && (!productIds || productIds.length === 0)) {
+      const requestedProductIds =
+        Array.isArray(productIds) && productIds.length > 0
+          ? productIds
+          : productId
+            ? [productId]
+            : [];
+
+      if (requestedProductIds.length === 0) {
         return res.status(400).json({ error: "Missing required field: productId or productIds" });
       }
 
-      // Allow simulation in test mode or if explicitly requested
       const isTestMode = (process.env.RAZORPAY_KEY_ID || "").startsWith("rzp_test_");
       
       const paymentDetails = {
@@ -1365,75 +1622,50 @@ async function startServer() {
       };
 
       if (simulation === true || (isTestMode && !razorpay_signature)) {
-        console.log("Processing simulated/test payment for products:", productId || productIds);
-        
-        if (productIds && productIds.length > 0) {
-          const results = [];
-          for (const id of productIds) {
-            try {
-              const result = await processPaymentSuccess(id, buyerId, paymentDetails);
-              results.push(result);
-            } catch (err) {
-              console.error(`Error processing payment for product ${id}:`, err);
-            }
-          }
-          // Clear cart
-          await Cart.deleteMany({ userId: buyerId });
-          return res.json({ success: true, results });
-        } else {
-          const result = await processPaymentSuccess(productId, buyerId, paymentDetails);
-          return res.json(result);
-        }
+        console.log("Processing simulated/test payment for products:", requestedProductIds);
+        const result = await processVerifiedPayment({
+          productIds: requestedProductIds,
+          buyerId,
+          paymentDetails,
+        });
+        await Cart.deleteMany({ userId: buyerId, productId: { $in: requestedProductIds } });
+        return res.json(result);
       }
 
       if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
         return res.status(400).json({ error: "Missing Razorpay payment details" });
       }
 
-      const body = razorpay_order_id + "|" + razorpay_payment_id;
-      const expectedSignature = crypto
-        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET || "8Dm7YFRZKJaQ5EKxSsbSFzIG")
-        .update(body.toString())
-        .digest("hex");
+      const isValidSignature = verifyRazorpaySignature({
+        orderId: razorpay_order_id,
+        paymentId: razorpay_payment_id,
+        signature: razorpay_signature,
+      });
 
-      console.log("Signature verification:", { expected: expectedSignature, received: razorpay_signature });
-
-      if (expectedSignature === razorpay_signature) {
-        if (productIds && productIds.length > 0) {
-          const results = [];
-          for (const id of productIds) {
-            try {
-              const result = await processPaymentSuccess(id, buyerId, {
-                razorpay_order_id,
-                razorpay_payment_id,
-                razorpay_signature
-              });
-              results.push(result);
-            } catch (err) {
-              console.error(`Error processing payment for product ${id}:`, err);
-            }
-          }
-          // Clear cart
-          await Cart.deleteMany({ userId: buyerId });
-          return res.json({ success: true, results });
-        } else {
-          const result = await processPaymentSuccess(productId, buyerId, {
-            razorpay_order_id,
-            razorpay_payment_id,
-            razorpay_signature
-          });
-          res.json(result);
-        }
-      } else {
+      if (!isValidSignature) {
         console.error("Invalid Razorpay signature");
-        res.status(400).json({ error: "Invalid signature" });
+        return res.status(400).json({ error: "Payment verification failed. Invalid Razorpay signature." });
       }
+
+      const result = await processVerifiedPayment({
+        productIds: requestedProductIds,
+        buyerId,
+        paymentDetails: {
+          razorpay_order_id,
+          razorpay_payment_id,
+          razorpay_signature,
+        },
+      });
+
+      await Cart.deleteMany({ userId: buyerId, productId: { $in: requestedProductIds } });
+      return res.json(result);
     } catch (error) {
       console.error("Error verifying payment:", error);
       res.status(500).json({ error: "Payment verification failed", details: error instanceof Error ? error.message : String(error) });
     }
   };
 
+  app.post("/api/verify-payment", authenticate, verifyPaymentHandler);
   app.post("/api/payment/verify-payment", authenticate, verifyPaymentHandler);
   app.post("/api/payments/verify", authenticate, verifyPaymentHandler);
 
