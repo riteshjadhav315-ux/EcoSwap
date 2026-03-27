@@ -1483,14 +1483,17 @@ async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     try {
       console.log("Initializing Vite middleware...");
+      const frontendRoot = path.resolve(__dirname, "../frontend");
       const vite = await createViteServer({
+        root: frontendRoot,
+        envDir: frontendRoot,
+        configFile: path.resolve(frontendRoot, "vite.config.ts"),
         server: { 
           middlewareMode: true,
           hmr: false,
           watch: null,
         },
         appType: "spa",
-        root: path.resolve(__dirname, "../frontend"),
       });
       app.use(vite.middlewares);
       console.log("Vite middleware attached");

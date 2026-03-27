@@ -154,7 +154,7 @@ export default function Auth() {
                         if (error) setError("");
                       }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
-                      placeholder="John"
+                      placeholder="First Name"
                     />
                   </div>
                 </div>
@@ -173,7 +173,7 @@ export default function Auth() {
                         if (error) setError("");
                       }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
-                      placeholder="Doe"
+                      placeholder="Last Name"
                     />
                   </div>
                 </div>
