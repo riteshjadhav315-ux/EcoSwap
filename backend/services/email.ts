@@ -29,6 +29,7 @@ export interface InvoiceEmailResult {
 }
 
 let transporter: nodemailer.Transporter | null = null;
+const EMAIL_TIMEOUT_MS = Number(process.env.EMAIL_TIMEOUT_MS || 12000);
 
 const escapeHtml = (value: string) =>
   value
@@ -64,6 +65,9 @@ const getTransporter = () => {
 
   transporter = nodemailer.createTransport({
     service: "gmail",
+    connectionTimeout: EMAIL_TIMEOUT_MS,
+    greetingTimeout: EMAIL_TIMEOUT_MS,
+    socketTimeout: EMAIL_TIMEOUT_MS,
     auth: {
       user,
       pass,
@@ -180,12 +184,20 @@ export async function sendInvoiceEmail(
   }
 
   try {
-    const info = await transporterInstance.sendMail({
+    const sendMailPromise = transporterInstance.sendMail({
       from: `EcoSwap <${emailUser}>`,
       to: userEmail,
       subject: "Order Invoice - EcoSwap",
       html: buildInvoiceEmailHtml(order),
     });
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => {
+        reject(new Error(`Invoice email timed out after ${EMAIL_TIMEOUT_MS / 1000} seconds.`));
+      }, EMAIL_TIMEOUT_MS);
+    });
+
+    const info = await Promise.race([sendMailPromise, timeoutPromise]);
 
     return {
       success: true,
@@ -194,11 +206,19 @@ export async function sendInvoiceEmail(
       messageId: info.messageId,
     };
   } catch (error) {
+    const rawError = error instanceof Error ? error.message : "Unknown email error";
+    const normalizedError =
+      /invalid login|auth/i.test(rawError)
+        ? "Gmail authentication failed. Check EMAIL_USER and Gmail App Password."
+        : /timed out/i.test(rawError)
+          ? "Invoice email timed out on the server. Payment succeeded, but email could not be confirmed."
+          : rawError;
+
     return {
       success: false,
       status: "failed",
       provider: "gmail",
-      error: error instanceof Error ? error.message : "Unknown email error",
+      error: normalizedError,
     };
   }
 }
