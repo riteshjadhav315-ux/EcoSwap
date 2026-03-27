@@ -17,19 +17,20 @@ const orderSchema = new mongoose.Schema({
   signature: { type: String, required: true },
   buyerId: { type: String, required: true, index: true },
   buyerName: { type: String, required: true },
-  buyerPhone: { type: String, default: "" },
+  buyerEmail: { type: String, required: true },
   items: { type: [orderItemSchema], required: true, default: [] },
   quantity: { type: Number, required: true },
   totalAmount: { type: Number, required: true },
   currency: { type: String, default: "INR" },
   status: { type: String, enum: ["paid", "failed"], default: "paid" },
-  smsStatus: {
+  emailStatus: {
     type: String,
     enum: ["pending", "sent", "failed", "skipped"],
     default: "pending",
   },
-  smsError: { type: String, default: "" },
-  smsSentAt: { type: Date },
+  emailMessageId: { type: String, default: "" },
+  emailError: { type: String, default: "" },
+  emailSentAt: { type: Date },
   createdAt: { type: Date, default: Date.now, index: true },
 });
 

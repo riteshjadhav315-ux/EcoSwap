@@ -49,13 +49,12 @@ export default function Profile() {
             const verificationResult = await verifyPayment({
               ...response,
               productIds,
-              buyerName: profile?.name || user.name || "Buyer",
-              buyerPhone: profile?.phone || ""
+              buyerName: profile?.name || user.name || "Buyer"
             });
-            if (verificationResult?.sms?.success) {
-              alert("Payment successful! Invoice SMS sent to your registered mobile number.");
+            if (verificationResult?.email?.success) {
+              alert("Payment successful! Invoice email sent to your registered email address.");
             } else {
-              alert(`Payment successful, but invoice SMS was not sent: ${verificationResult?.sms?.error || "Unknown SMS error"}`);
+              alert(`Payment successful, but invoice email was not sent: ${verificationResult?.email?.error || "Unknown email error"}`);
             }
             await clearCart();
             setActiveTab("profile");
@@ -88,13 +87,12 @@ export default function Profile() {
             razorpay_signature: "simulated",
             productIds,
             buyerName: profile?.name || user.name || "Buyer",
-            buyerPhone: profile?.phone || "",
             simulation: true
           });
-          if (verificationResult?.sms?.success) {
-            alert("Simulated payment successful! Invoice SMS sent.");
+          if (verificationResult?.email?.success) {
+            alert("Simulated payment successful! Invoice email sent.");
           } else {
-            alert(`Simulated payment successful, but invoice SMS was not sent: ${verificationResult?.sms?.error || "Unknown SMS error"}`);
+            alert(`Simulated payment successful, but invoice email was not sent: ${verificationResult?.email?.error || "Unknown email error"}`);
           }
           await clearCart();
           setActiveTab("profile");

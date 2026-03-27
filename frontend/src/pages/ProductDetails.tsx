@@ -167,19 +167,18 @@ export default function ProductDetails() {
         ...response,
         productId: id,
         buyerName: user?.name || "Buyer",
-        buyerPhone,
         simulation: isSimulation
       });
 
-      if (!verificationResult?.sms?.success) {
-        const smsError = verificationResult?.sms?.error || "Invoice SMS could not be sent.";
-        setToastMessage(`Payment successful, but SMS failed: ${smsError}`);
+      if (!verificationResult?.email?.success) {
+        const emailError = verificationResult?.email?.error || "Invoice email could not be sent.";
+        setToastMessage(`Payment successful, but invoice email failed: ${emailError}`);
         setShowToast(true);
         setTimeout(() => setShowToast(false), 5000);
       } else {
-        setToastMessage("Payment successful! Invoice SMS sent.");
+        setToastMessage("Payment successful! Invoice email sent.");
         setShowToast(true);
-        setTimeout(() => setShowToast(false), 4000);
+        setTimeout(() => setShowToast(false), 5000);
       }
       
       // 4. Success

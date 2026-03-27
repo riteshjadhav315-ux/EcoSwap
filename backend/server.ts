@@ -34,7 +34,7 @@ import { Report } from "./models/Report";
 import { Review } from "./models/Review";
 import { SoldProduct } from "./models/SoldProduct";
 import { Cart } from "./models/Cart";
-import { normalizeIndianPhoneNumber, sendOrderConfirmationSms } from "./services/sms";
+import { sendInvoiceEmail } from "./services/email";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
@@ -1418,7 +1418,7 @@ async function startServer() {
       totalAmount: product.price,
     }));
 
-  const buildSmsProductLabel = (invoiceItems: any[]) => {
+  const buildInvoiceProductLabel = (invoiceItems: any[]) => {
     if (invoiceItems.length === 1) {
       return invoiceItems[0].productName;
     }
@@ -1429,85 +1429,46 @@ async function startServer() {
 
   const buildInvoiceResponse = (order: any) => ({
     items: order.items,
-    productName: buildSmsProductLabel(order.items),
+    productName: buildInvoiceProductLabel(order.items),
     quantity: order.quantity,
     totalAmount: order.totalAmount,
     orderId: order.orderId,
     razorpayPaymentId: order.paymentId,
     dateTime: order.createdAt,
     buyerName: order.buyerName,
+    buyerEmail: order.buyerEmail,
+    emailStatus: order.emailStatus,
+    emailMessageId: order.emailMessageId,
+    emailError: order.emailError,
   });
 
-  const selectBestBuyerPhone = (...phoneCandidates: Array<string | undefined | null>) => {
-    let firstNonEmpty = "";
-
-    for (const candidate of phoneCandidates) {
-      const rawPhone = (candidate || "").trim();
-      if (!rawPhone) continue;
-
-      if (!firstNonEmpty) {
-        firstNonEmpty = rawPhone;
-      }
-
-      const normalizedPhone = normalizeIndianPhoneNumber(rawPhone);
-      if (normalizedPhone) {
-        return {
-          rawPhone,
-          normalizedPhone,
-        };
-      }
-    }
-
-    return {
-      rawPhone: firstNonEmpty,
-      normalizedPhone: "",
-    };
-  };
-
-  const getBuyerPhoneFromRazorpayPayment = async (paymentId?: string) => {
-    if (!paymentId) return "";
-
-    try {
-      const payment = await razorpay.payments.fetch(paymentId);
-      if (!payment || payment.error_code) {
-        return "";
-      }
-
-      if (typeof payment.contact === "number") {
-        return String(payment.contact);
-      }
-
-      return typeof payment.contact === "string" ? payment.contact : "";
-    } catch (error) {
-      console.error("Unable to fetch buyer contact from Razorpay payment:", error);
-      return "";
-    }
-  };
-
-  const attemptOrderInvoiceSms = async (order: any, buyerPhone: string) => {
-    const smsResult = await sendOrderConfirmationSms({
-      phoneNumber: buyerPhone || "",
-      productName: buildSmsProductLabel(order.items),
-      totalAmount: order.totalAmount,
+  const attemptOrderInvoiceEmail = async (order: any, buyerEmail: string) => {
+    const emailResult = await sendInvoiceEmail(buyerEmail || "", {
+      buyerName: order.buyerName,
       orderId: order.orderId,
+      paymentId: order.paymentId,
+      items: order.items,
+      quantity: order.quantity,
+      totalAmount: order.totalAmount,
+      currency: order.currency,
+      createdAt: order.createdAt,
     });
 
-    order.smsStatus = smsResult.status;
-    order.smsError = smsResult.success ? "" : smsResult.error || "";
-    if (smsResult.success) {
-      order.smsSentAt = new Date();
+    order.emailStatus = emailResult.status;
+    order.emailMessageId = emailResult.messageId || "";
+    order.emailError = emailResult.success ? "" : emailResult.error || "";
+    if (emailResult.success) {
+      order.emailSentAt = new Date();
     }
 
-    return smsResult;
+    return emailResult;
   };
 
   const processVerifiedPayment = async ({
     productIds,
     buyerId,
     paymentDetails,
-    buyerPhone,
     buyerName,
-    skipSms = false,
   }: {
     productIds: string[];
     buyerId: string;
@@ -1516,13 +1477,17 @@ async function startServer() {
       razorpay_payment_id: string;
       razorpay_signature: string;
     };
-    buyerPhone?: string;
     buyerName?: string;
-    skipSms?: boolean;
   }) => {
-    const razorpayBuyerPhone = skipSms
-      ? ""
-      : await getBuyerPhoneFromRazorpayPayment(paymentDetails.razorpay_payment_id);
+    const buyer = await User.findOne({ uid: buyerId });
+    if (!buyer) {
+      throw new Error("Buyer not found");
+    }
+
+    const buyerEmail = (buyer.email || "").trim();
+    if (!buyerEmail) {
+      throw new Error("Buyer email not found");
+    }
 
     const existingOrder = await Order.findOne({
       $or: [
@@ -1532,32 +1497,26 @@ async function startServer() {
     });
 
     if (existingOrder) {
-      let smsResult: {
+      let emailResult: {
         success: boolean;
         status: "sent" | "failed" | "skipped";
-        provider: "fast2sms";
-        message: string;
+        provider: "gmail";
         error?: string;
+        messageId?: string;
       } = {
-        success: existingOrder.smsStatus === "sent",
-        status: existingOrder.smsStatus === "pending" ? "failed" : existingOrder.smsStatus,
-        provider: "fast2sms" as const,
-        message: "",
-        error: existingOrder.smsError || undefined,
+        success: existingOrder.emailStatus === "sent",
+        status: existingOrder.emailStatus === "pending" ? "failed" : existingOrder.emailStatus,
+        provider: "gmail" as const,
+        error: existingOrder.emailError || undefined,
+        messageId: existingOrder.emailMessageId || undefined,
       };
 
-      const { rawPhone: retryRawPhone, normalizedPhone: retryNormalizedPhone } = selectBestBuyerPhone(
-        buyerPhone,
-        existingOrder.buyerPhone,
-        razorpayBuyerPhone
-      );
-      const retryPhone = retryNormalizedPhone || retryRawPhone;
-      if (retryPhone && retryPhone !== existingOrder.buyerPhone) {
-        existingOrder.buyerPhone = retryPhone;
+      if (buyerEmail && buyerEmail !== existingOrder.buyerEmail) {
+        existingOrder.buyerEmail = buyerEmail;
       }
 
-      if (!skipSms && existingOrder.smsStatus !== "sent") {
-        smsResult = await attemptOrderInvoiceSms(existingOrder, retryPhone);
+      if (existingOrder.emailStatus !== "sent") {
+        emailResult = await attemptOrderInvoiceEmail(existingOrder, buyerEmail);
         await existingOrder.save();
       }
 
@@ -1567,23 +1526,8 @@ async function startServer() {
         paymentId: existingOrder.paymentId,
         order: existingOrder,
         invoice: buildInvoiceResponse(existingOrder),
-        sms: smsResult,
+        email: emailResult,
       };
-    }
-
-    const buyer = await User.findOne({ uid: buyerId });
-    if (!buyer) {
-      throw new Error("Buyer not found");
-    }
-
-    const { rawPhone: resolvedBuyerPhone, normalizedPhone: normalizedBuyerPhone } = selectBestBuyerPhone(
-      buyer.phone,
-      buyerPhone,
-      razorpayBuyerPhone
-    );
-    if (normalizedBuyerPhone && buyer.phone !== normalizedBuyerPhone) {
-      buyer.phone = normalizedBuyerPhone;
-      await buyer.save();
     }
 
     const products = await getPurchasableProducts(productIds, buyerId);
@@ -1614,32 +1558,18 @@ async function startServer() {
       signature: paymentDetails.razorpay_signature,
       buyerId,
       buyerName: buyer.name || buyerName || "Buyer",
-      buyerPhone: normalizedBuyerPhone || resolvedBuyerPhone,
+      buyerEmail,
       items: invoiceItems,
       quantity: totalQuantity,
       totalAmount,
       currency: "INR",
       status: "paid",
-      smsStatus: "pending",
+      emailStatus: "pending",
     });
 
-    let smsResult;
-
-    if (skipSms) {
-      smsResult = {
-        success: false,
-        status: "skipped" as const,
-        provider: "fast2sms" as const,
-        message: "",
-        error: "SMS skipped for simulated payment verification.",
-      };
-      order.smsStatus = "skipped";
-      order.smsError = smsResult.error;
-    } else {
-      smsResult = await attemptOrderInvoiceSms(order, normalizedBuyerPhone || resolvedBuyerPhone);
-      if (!smsResult.success) {
-        console.error("Fast2SMS invoice SMS failed:", smsResult.error, smsResult.responseBody || "");
-      }
+    const emailResult = await attemptOrderInvoiceEmail(order, buyerEmail);
+    if (!emailResult.success) {
+      console.error("Invoice email failed:", emailResult.error || "Unknown email error");
     }
 
     await order.save();
@@ -1650,7 +1580,7 @@ async function startServer() {
       paymentId: order.paymentId,
       order,
       invoice: buildInvoiceResponse(order),
-      sms: smsResult,
+      email: emailResult,
     };
   };
 
@@ -1682,7 +1612,7 @@ async function startServer() {
   const verifyPaymentHandler = async (req: any, res: express.Response) => {
     try {
       console.log("Received payment verification request:", req.body);
-      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, productId, productIds, simulation, buyerPhone, buyerName } = req.body;
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, productId, productIds, simulation, buyerName } = req.body;
       const buyerId = req.user.uid;
 
       const requestedProductIds =
@@ -1710,7 +1640,6 @@ async function startServer() {
           productIds: requestedProductIds,
           buyerId,
           paymentDetails,
-          buyerPhone,
           buyerName,
         });
         await Cart.deleteMany({ userId: buyerId, productId: { $in: requestedProductIds } });
@@ -1740,7 +1669,6 @@ async function startServer() {
             razorpay_payment_id,
             razorpay_signature,
           },
-          buyerPhone,
           buyerName,
         });
 
