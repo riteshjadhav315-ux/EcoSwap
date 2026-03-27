@@ -34,7 +34,7 @@ import { Report } from "./models/Report";
 import { Review } from "./models/Review";
 import { SoldProduct } from "./models/SoldProduct";
 import { Cart } from "./models/Cart";
-import { sendOrderConfirmationSms } from "./services/sms";
+import { normalizeIndianPhoneNumber, sendOrderConfirmationSms } from "./services/sms";
 
 const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
@@ -1438,6 +1438,52 @@ async function startServer() {
     buyerName: order.buyerName,
   });
 
+  const selectBestBuyerPhone = (...phoneCandidates: Array<string | undefined | null>) => {
+    let firstNonEmpty = "";
+
+    for (const candidate of phoneCandidates) {
+      const rawPhone = (candidate || "").trim();
+      if (!rawPhone) continue;
+
+      if (!firstNonEmpty) {
+        firstNonEmpty = rawPhone;
+      }
+
+      const normalizedPhone = normalizeIndianPhoneNumber(rawPhone);
+      if (normalizedPhone) {
+        return {
+          rawPhone,
+          normalizedPhone,
+        };
+      }
+    }
+
+    return {
+      rawPhone: firstNonEmpty,
+      normalizedPhone: "",
+    };
+  };
+
+  const getBuyerPhoneFromRazorpayPayment = async (paymentId?: string) => {
+    if (!paymentId) return "";
+
+    try {
+      const payment = await razorpay.payments.fetch(paymentId);
+      if (!payment || payment.error_code) {
+        return "";
+      }
+
+      if (typeof payment.contact === "number") {
+        return String(payment.contact);
+      }
+
+      return typeof payment.contact === "string" ? payment.contact : "";
+    } catch (error) {
+      console.error("Unable to fetch buyer contact from Razorpay payment:", error);
+      return "";
+    }
+  };
+
   const attemptOrderInvoiceSms = async (order: any, buyerPhone: string) => {
     const smsResult = await sendOrderConfirmationSms({
       phoneNumber: buyerPhone || "",
@@ -1459,6 +1505,8 @@ async function startServer() {
     productIds,
     buyerId,
     paymentDetails,
+    buyerPhone,
+    buyerName,
     skipSms = false,
   }: {
     productIds: string[];
@@ -1468,8 +1516,14 @@ async function startServer() {
       razorpay_payment_id: string;
       razorpay_signature: string;
     };
+    buyerPhone?: string;
+    buyerName?: string;
     skipSms?: boolean;
   }) => {
+    const razorpayBuyerPhone = skipSms
+      ? ""
+      : await getBuyerPhoneFromRazorpayPayment(paymentDetails.razorpay_payment_id);
+
     const existingOrder = await Order.findOne({
       $or: [
         { paymentId: paymentDetails.razorpay_payment_id },
@@ -1492,8 +1546,18 @@ async function startServer() {
         error: existingOrder.smsError || undefined,
       };
 
+      const { rawPhone: retryRawPhone, normalizedPhone: retryNormalizedPhone } = selectBestBuyerPhone(
+        buyerPhone,
+        existingOrder.buyerPhone,
+        razorpayBuyerPhone
+      );
+      const retryPhone = retryNormalizedPhone || retryRawPhone;
+      if (retryPhone && retryPhone !== existingOrder.buyerPhone) {
+        existingOrder.buyerPhone = retryPhone;
+      }
+
       if (!skipSms && existingOrder.smsStatus !== "sent") {
-        smsResult = await attemptOrderInvoiceSms(existingOrder, existingOrder.buyerPhone || "");
+        smsResult = await attemptOrderInvoiceSms(existingOrder, retryPhone);
         await existingOrder.save();
       }
 
@@ -1510,6 +1574,16 @@ async function startServer() {
     const buyer = await User.findOne({ uid: buyerId });
     if (!buyer) {
       throw new Error("Buyer not found");
+    }
+
+    const { rawPhone: resolvedBuyerPhone, normalizedPhone: normalizedBuyerPhone } = selectBestBuyerPhone(
+      buyer.phone,
+      buyerPhone,
+      razorpayBuyerPhone
+    );
+    if (normalizedBuyerPhone && buyer.phone !== normalizedBuyerPhone) {
+      buyer.phone = normalizedBuyerPhone;
+      await buyer.save();
     }
 
     const products = await getPurchasableProducts(productIds, buyerId);
@@ -1539,8 +1613,8 @@ async function startServer() {
       paymentId: paymentDetails.razorpay_payment_id,
       signature: paymentDetails.razorpay_signature,
       buyerId,
-      buyerName: buyer.name || "Buyer",
-      buyerPhone: buyer.phone || "",
+      buyerName: buyer.name || buyerName || "Buyer",
+      buyerPhone: normalizedBuyerPhone || resolvedBuyerPhone,
       items: invoiceItems,
       quantity: totalQuantity,
       totalAmount,
@@ -1562,7 +1636,7 @@ async function startServer() {
       order.smsStatus = "skipped";
       order.smsError = smsResult.error;
     } else {
-      smsResult = await attemptOrderInvoiceSms(order, buyer.phone || "");
+      smsResult = await attemptOrderInvoiceSms(order, normalizedBuyerPhone || resolvedBuyerPhone);
       if (!smsResult.success) {
         console.error("Fast2SMS invoice SMS failed:", smsResult.error, smsResult.responseBody || "");
       }
@@ -1608,7 +1682,7 @@ async function startServer() {
   const verifyPaymentHandler = async (req: any, res: express.Response) => {
     try {
       console.log("Received payment verification request:", req.body);
-      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, productId, productIds, simulation } = req.body;
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, productId, productIds, simulation, buyerPhone, buyerName } = req.body;
       const buyerId = req.user.uid;
 
       const requestedProductIds =
@@ -1636,6 +1710,8 @@ async function startServer() {
           productIds: requestedProductIds,
           buyerId,
           paymentDetails,
+          buyerPhone,
+          buyerName,
         });
         await Cart.deleteMany({ userId: buyerId, productId: { $in: requestedProductIds } });
         return res.json(result);
@@ -1656,15 +1732,17 @@ async function startServer() {
         return res.status(400).json({ error: "Payment verification failed. Invalid Razorpay signature." });
       }
 
-      const result = await processVerifiedPayment({
-        productIds: requestedProductIds,
-        buyerId,
-        paymentDetails: {
-          razorpay_order_id,
-          razorpay_payment_id,
-          razorpay_signature,
-        },
-      });
+        const result = await processVerifiedPayment({
+          productIds: requestedProductIds,
+          buyerId,
+          paymentDetails: {
+            razorpay_order_id,
+            razorpay_payment_id,
+            razorpay_signature,
+          },
+          buyerPhone,
+          buyerName,
+        });
 
       await Cart.deleteMany({ userId: buyerId, productId: { $in: requestedProductIds } });
       return res.json(result);

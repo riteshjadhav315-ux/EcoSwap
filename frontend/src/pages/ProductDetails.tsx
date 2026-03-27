@@ -9,6 +9,7 @@ import { startChat } from "../services/chatService";
 import { addToWishlist, removeFromWishlist, isInWishlist } from "../services/wishlistService";
 import { createOrder, verifyPayment } from "../services/paymentService";
 import { getProductReviews, getSellerAverageRating, Review } from "../services/reviewService";
+import { getUserProfile } from "../services/userService";
 import { StarRating } from "../components/StarRating";
 import { ReviewList } from "../components/ReviewList";
 import { ReviewForm } from "../components/ReviewForm";
@@ -31,6 +32,7 @@ export default function ProductDetails() {
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [showToast, setShowToast] = useState(false);
   const [toastMessage, setToastMessage] = useState("");
+  const [buyerPhone, setBuyerPhone] = useState("");
 
   const images = product?.images && product.images.length > 0 
     ? product.images 
@@ -86,6 +88,24 @@ export default function ProductDetails() {
     }
     fetchProduct();
   }, [id, user]);
+
+  useEffect(() => {
+    async function fetchBuyerProfile() {
+      if (!user) {
+        setBuyerPhone("");
+        return;
+      }
+
+      try {
+        const profile = await getUserProfile(user.uid);
+        setBuyerPhone(profile?.phone || "");
+      } catch (profileError) {
+        console.error("Error fetching buyer profile:", profileError);
+      }
+    }
+
+    fetchBuyerProfile();
+  }, [user]);
 
   const handleWishlist = async () => {
     if (!user) {
@@ -146,6 +166,8 @@ export default function ProductDetails() {
       const verificationResult = await verifyPayment({
         ...response,
         productId: id,
+        buyerName: user?.name || "Buyer",
+        buyerPhone,
         simulation: isSimulation
       });
 
@@ -227,6 +249,7 @@ export default function ProductDetails() {
         prefill: {
           name: user.name,
           email: user.email,
+          contact: buyerPhone,
         },
         theme: {
           color: "#059669", // emerald-600

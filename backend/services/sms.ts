@@ -19,17 +19,17 @@ export interface SmsSendResult {
 }
 
 export function normalizeIndianPhoneNumber(phoneNumber: string): string | null {
-  const digitsOnly = phoneNumber.replace(/\D/g, "");
+  let digitsOnly = phoneNumber.replace(/\D/g, "");
 
-  if (digitsOnly.length === 10) {
-    return digitsOnly;
+  if (digitsOnly.startsWith("91") && digitsOnly.length > 10) {
+    digitsOnly = digitsOnly.slice(2);
   }
 
-  if (digitsOnly.length === 12 && digitsOnly.startsWith("91")) {
-    return digitsOnly.slice(2);
+  if (digitsOnly.startsWith("0") && digitsOnly.length > 10) {
+    digitsOnly = digitsOnly.replace(/^0+/, "");
   }
 
-  return null;
+  return digitsOnly.length === 10 ? digitsOnly : null;
 }
 
 export function buildOrderConfirmationSmsMessage(input: Omit<OrderConfirmationSmsInput, "phoneNumber">): string {

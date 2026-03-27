@@ -48,7 +48,9 @@ export default function Profile() {
             const productIds = cartItems.map(item => item.productId);
             const verificationResult = await verifyPayment({
               ...response,
-              productIds
+              productIds,
+              buyerName: profile?.name || user.name || "Buyer",
+              buyerPhone: profile?.phone || ""
             });
             if (verificationResult?.sms?.success) {
               alert("Payment successful! Invoice SMS sent to your registered mobile number.");
@@ -85,6 +87,8 @@ export default function Profile() {
             razorpay_payment_id: `sim_pay_${Date.now()}`,
             razorpay_signature: "simulated",
             productIds,
+            buyerName: profile?.name || user.name || "Buyer",
+            buyerPhone: profile?.phone || "",
             simulation: true
           });
           if (verificationResult?.sms?.success) {
