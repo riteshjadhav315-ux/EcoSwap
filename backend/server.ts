@@ -952,6 +952,15 @@ async function startServer() {
     }
   });
 
+  app.get("/api/orders/my", authenticate, async (req: any, res) => {
+    try {
+      const orders = await Order.find({ buyerId: req.user.uid }).sort({ createdAt: -1 });
+      res.json(orders);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch your orders" });
+    }
+  });
+
   app.get("/api/wishlist/my", authenticate, async (req: any, res) => {
     try {
       const items = await Wishlist.find({ userId: req.user.uid }).sort({ createdAt: -1 });
