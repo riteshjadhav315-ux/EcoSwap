@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Mail, Lock, Recycle, ArrowRight, AlertCircle, Loader2, User, Phone, MapPin } from "lucide-react";
+import { Mail, Lock, Recycle, ArrowRight, AlertCircle, Loader2, User, Phone, MapPin, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { GoogleLogin, CredentialResponse } from "@react-oauth/google";
 import { apiFetch } from "../services/api";
@@ -63,7 +63,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [successMessage, setSuccessMessage] = useState("");
+  const [showRegistrationSuccess, setShowRegistrationSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const routeLocation = useLocation();
@@ -77,7 +77,7 @@ export default function Auth() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    setSuccessMessage("");
+    setShowRegistrationSuccess(false);
     setLoading(true);
 
     try {
@@ -98,16 +98,46 @@ export default function Auth() {
         return;
       }
 
-      setSuccessMessage("Registration successful! Welcome to EcoSwap.");
+      setShowRegistrationSuccess(true);
       setTimeout(() => {
         navigate(redirectPath);
-      }, 1600);
+      }, 1800);
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
   };
+
+  if (showRegistrationSuccess) {
+    return (
+      <div className="min-h-screen bg-emerald-50/30 flex items-center justify-center p-4 sm:p-6 lg:p-8">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 18 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          className="w-full max-w-lg bg-white rounded-[2rem] sm:rounded-[2.5rem] p-8 sm:p-12 shadow-2xl shadow-emerald-100 border border-emerald-50 text-center"
+        >
+          <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle2 className="w-11 h-11 text-emerald-600" />
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-black text-emerald-950 mb-3">
+            Registration Successful
+          </h1>
+          <p className="text-emerald-700/80 font-medium text-base sm:text-lg leading-relaxed">
+            Your EcoSwap account has been created successfully.
+          </p>
+          <p className="mt-3 text-emerald-600/70 font-medium">
+            Starting your EcoSwap experience...
+          </p>
+
+          <div className="mt-8 flex items-center justify-center gap-3 text-emerald-600 font-bold">
+            <Loader2 className="w-5 h-5 animate-spin" />
+            Redirecting you now
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-emerald-50/30 flex items-center justify-center p-4 sm:p-6 lg:p-8">
@@ -141,17 +171,6 @@ export default function Auth() {
           </motion.div>
         )}
 
-        {successMessage && (
-          <motion.div
-            initial={{ opacity: 0, x: -10 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="mb-6 p-4 bg-emerald-50 border border-emerald-100 rounded-2xl flex items-center gap-3 text-emerald-700 text-sm font-bold"
-          >
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            {successMessage}
-          </motion.div>
-        )}
-
         <form onSubmit={handleSubmit} className="space-y-6">
           <AnimatePresence mode="popLayout">
             {!isLogin && (
@@ -174,7 +193,6 @@ export default function Auth() {
                       onChange={(e) => {
                         setFirstName(e.target.value);
                         if (error) setError("");
-                        if (successMessage) setSuccessMessage("");
                       }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                       placeholder="First Name"
@@ -194,7 +212,6 @@ export default function Auth() {
                       onChange={(e) => {
                         setLastName(e.target.value);
                         if (error) setError("");
-                        if (successMessage) setSuccessMessage("");
                       }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                       placeholder="Last Name"
@@ -226,7 +243,6 @@ export default function Auth() {
                       onChange={(e) => {
                         setPhone(e.target.value);
                         if (error) setError("");
-                        if (successMessage) setSuccessMessage("");
                       }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                       placeholder="+1 (555) 000-0000"
@@ -247,7 +263,6 @@ export default function Auth() {
                       onChange={(e) => {
                         setLocation(e.target.value);
                         if (error) setError("");
-                        if (successMessage) setSuccessMessage("");
                       }}
                       className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                       placeholder="City, Country"
@@ -271,7 +286,6 @@ export default function Auth() {
                 onChange={(e) => {
                   setEmail(e.target.value);
                   if (error) setError("");
-                  if (successMessage) setSuccessMessage("");
                 }}
                 className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                 placeholder="you@example.com"
@@ -292,7 +306,6 @@ export default function Auth() {
                 onChange={(e) => {
                   setPassword(e.target.value);
                   if (error) setError("");
-                  if (successMessage) setSuccessMessage("");
                 }}
                 className="block w-full pl-12 pr-4 py-4 bg-emerald-50/50 border border-emerald-100 hover:border-emerald-300 focus:border-emerald-500 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:bg-white transition-all text-emerald-950 font-medium"
                 placeholder="••••••••"
@@ -349,7 +362,7 @@ export default function Auth() {
               onClick={() => {
                 setIsLogin(!isLogin);
                 setError("");
-                setSuccessMessage("");
+                setShowRegistrationSuccess(false);
               }}
               className="ml-2 text-emerald-600 font-black hover:underline"
             >
